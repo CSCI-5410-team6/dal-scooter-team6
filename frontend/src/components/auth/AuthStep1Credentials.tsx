@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 interface AuthStep1CredentialsProps {
   onSuccess: () => void;
@@ -10,6 +11,7 @@ const AuthStep1Credentials: React.FC<AuthStep1CredentialsProps> = ({
 }) => {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const { loginStep1 } = useAuth();
 
@@ -26,9 +28,7 @@ const AuthStep1Credentials: React.FC<AuthStep1CredentialsProps> = ({
     if (success) {
       onSuccess();
     } else {
-      setError(
-        "Invalid credentials. Try: guest1/guestpass, cust1/custpass, or admin1/adminpass"
-      );
+      setError("Invalid credentials.");
     }
   };
 
@@ -63,14 +63,29 @@ const AuthStep1Credentials: React.FC<AuthStep1CredentialsProps> = ({
           >
             Password
           </label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter your password"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+              placeholder="Enter your password"
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-700"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeSlashIcon className="w-5 h-5" />
+              ) : (
+                <EyeIcon className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -86,17 +101,6 @@ const AuthStep1Credentials: React.FC<AuthStep1CredentialsProps> = ({
           Continue to Step 2
         </button>
       </form>
-
-      <div className="mt-6 p-4 bg-gray-50 rounded-md">
-        <h3 className="text-sm font-medium text-gray-900 mb-2">
-          Demo Credentials:
-        </h3>
-        <ul className="text-sm text-gray-600 space-y-1">
-          <li>• Guest: guest1 / guestpass</li>
-          <li>• Customer: cust1 / custpass</li>
-          <li>• Admin: admin1 / adminpass</li>
-        </ul>
-      </div>
     </div>
   );
 };
