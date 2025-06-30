@@ -10,7 +10,6 @@ const securityQuestions = [
 ];
 
 const userTypes = [
-  { value: "guest", label: "Guest" },
   { value: "customer", label: "Customer" },
   { value: "admin", label: "Franchise (Admin)" },
 ];
@@ -77,7 +76,10 @@ const SignUp: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
         <h2 className="text-2xl font-bold text-center text-gray-900 mb-6">
-          Sign Up for DALScooter
+          <span className="text-3xl font-extrabold tracking-tight select-none">
+            <span className="text-blue-600">DAL</span>
+            <span className="text-gray-900">Scooter</span>
+          </span>
         </h2>
         {success && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-center">

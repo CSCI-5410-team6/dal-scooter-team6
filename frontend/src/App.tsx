@@ -1,23 +1,18 @@
 import React from "react";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import AuthFlow from "./components/auth/AuthFlow";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import SignUp from "./components/auth/SignUp";
+import PublicDashboard from "./components/dashboard/PublicDashboard";
 
-// Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { authState } = useAuth();
 
   if (!authState.isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <PublicDashboard />;
   }
 
   return <>{children}</>;
@@ -25,20 +20,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
 
 // Main App Content
 const AppContent: React.FC = () => {
-  const { authState } = useAuth();
-
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={
-          authState.isAuthenticated ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <AuthFlow />
-          )
-        }
-      />
+      <Route path="/login" element={<AuthFlow />} />
       <Route path="/signup" element={<SignUp />} />
       <Route
         path="/dashboard"
@@ -48,16 +32,7 @@ const AppContent: React.FC = () => {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/"
-        element={
-          authState.isAuthenticated ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
+      <Route path="/" element={<PublicDashboard />} />
     </Routes>
   );
 };
