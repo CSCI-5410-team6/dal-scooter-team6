@@ -58,18 +58,19 @@ const DashboardLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-blue-100 shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">DALScooter</h1>
-              <span
-                className={`ml-3 px-2 py-1 text-xs font-medium text-white rounded-full ${getUserTypeColor(
-                  currentUser.userType
-                )}`}
-              >
-                {getUserTypeLabel(currentUser.userType)}
+              <span className="text-2xl font-extrabold tracking-tight select-none">
+                <span className="text-blue-600">DAL</span>
+                <span className="text-gray-900">Scooter</span>
               </span>
+              {currentUser.userType === "admin" && (
+                <span className="ml-4 text-base text-gray-700 font-semibold">
+                  Admin
+                </span>
+              )}
             </div>
 
             <div className="flex items-center space-x-4">

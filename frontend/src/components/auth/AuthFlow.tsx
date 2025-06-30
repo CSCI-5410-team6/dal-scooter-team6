@@ -164,7 +164,10 @@ const AuthFlow: React.FC = () => {
 
         {/* App Info */}
         <div className="mt-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">DALScooter</h1>
+          <span className="text-3xl font-extrabold tracking-tight select-none">
+            <span className="text-blue-600">DAL</span>
+            <span className="text-gray-900">Scooter</span>
+          </span>
           <p className="text-gray-600">3-Factor Authentication System</p>
         </div>
       </div>
