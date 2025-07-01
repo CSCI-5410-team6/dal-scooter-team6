@@ -25,16 +25,16 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t gcr.io/dalscooter-464600/dalscooter-frontend:latest ./frontend
+          docker build -t us-docker.pkg.dev/dalscooter-464600/gcr.io/dalscooter-frontend:latest ./frontend
 
       - name: Push Docker image
         run: |
-          docker push gcr.io/dalscooter-464600/dalscooter-frontend:latest
+          docker push us-docker.pkg.dev/dalscooter-464600/gcr.io/dalscooter-frontend:latest
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy dalscooter-frontend \
-            --image gcr.io/dalscooter-464600/dalscooter-frontend:latest \
+            --image us-docker.pkg.dev/dalscooter-464600/gcr.io/dalscooter-frontend:latest \
             --region northamerica-northeast1 \
             --platform managed \
             --allow-unauthenticated
