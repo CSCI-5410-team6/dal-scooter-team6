@@ -90,17 +90,6 @@ const AuthStep2SecurityQuestion: React.FC<AuthStep2SecurityQuestionProps> = ({
           </button>
         </div>
       </form>
-
-      <div className="mt-6 p-4 bg-gray-50 rounded-md">
-        <h3 className="text-sm font-medium text-gray-900 mb-2">
-          Demo Answers:
-        </h3>
-        <ul className="text-sm text-gray-600 space-y-1">
-          <li>• Guest: blue</li>
-          <li>• Customer: buddy</li>
-          <li>• Admin: toronto</li>
-        </ul>
-      </div>
     </div>
   );
 };

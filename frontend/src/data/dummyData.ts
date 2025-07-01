@@ -3,14 +3,6 @@ import { User, Scooter, Booking, Feedback, Message } from "../types";
 // Dummy users (mimicking DynamoDB)
 export const dummyUsers: User[] = [
   {
-    id: "1",
-    username: "guest1",
-    userType: "guest",
-    email: "guest@example.com",
-    securityQuestion: "What is your favorite color?",
-    securityAnswer: "blue",
-  },
-  {
     id: "2",
     username: "cust1",
     userType: "customer",
@@ -170,14 +162,12 @@ export const dummyMessages: Message[] = [
 
 // Login credentials (hardcoded as requested)
 export const loginCredentials = {
-  guest1: { password: "guestpass", userType: "guest" as const },
   cust1: { password: "custpass", userType: "customer" as const },
   admin1: { password: "adminpass", userType: "admin" as const },
 };
 
 // Security questions for step 2
 export const securityQuestions = {
-  guest1: "What is your favorite color?",
   cust1: "What is your pet's name?",
   admin1: "What city were you born in?",
 };
