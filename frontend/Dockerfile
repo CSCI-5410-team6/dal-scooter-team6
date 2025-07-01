@@ -1,11 +1,29 @@
-# Use an official Nginx image
+# Build stage
+FROM node:18-alpine as build
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy source code
+COPY . .
+
+# Build the app
+RUN npm run build
+
+# Production stage
 FROM nginx:alpine
 
 # Remove default nginx static assets
 RUN rm -rf /usr/share/nginx/html/*
 
-# Copy build output to Nginx's public directory
-COPY build /usr/share/nginx/html
+# Copy build output from build stage
+COPY --from=build /app/build /usr/share/nginx/html
 
 # Copy custom nginx config (optional, see below)
 # COPY nginx.conf /etc/nginx/conf.d/default.conf
