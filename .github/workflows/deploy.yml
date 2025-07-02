@@ -23,6 +23,9 @@ jobs:
         with:
           project_id: dalscooter-464600
 
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-docker.pkg.dev
+
       - name: Build Docker image
         run: |
           docker build -t us-docker.pkg.dev/dalscooter-464600/gcr.io/dalscooter-frontend:latest ./frontend
