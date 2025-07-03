@@ -86,7 +86,7 @@ yarn-debug.log*
 # Documentation / images
 # ==============================
 # (ignore generated image artifacts, if any)
-*.png
-*.jpg
-*.jpeg
-*.svg
+# *.png
+# *.jpg
+# *.jpeg
+# *.svg
