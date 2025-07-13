@@ -1,0 +1,16 @@
+{
+    "RegisterIntent": [
+        "How do I register?",
+        "How to sign up?",
+        "How to use the app?",
+        "Where is the booking page?",
+        "How to navigate the site?",
+        "How do I create an account?",
+        "Where can I book a bike?",
+        "Show me how to register",
+        "How to get started with the app",
+        "Where do I find the booking section?"
+    ],
+    "BookingIntent": [],
+    "SupportIntent": []
+}
