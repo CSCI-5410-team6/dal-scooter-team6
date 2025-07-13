@@ -48,16 +48,6 @@ const AuthStep3CaesarCipher: React.FC<AuthStep3CaesarCipherProps> = ({
           </div>
         </div>
 
-        <div className="p-4 bg-blue-50 rounded-md">
-          <h3 className="text-sm font-medium text-blue-900 mb-2">
-            How to solve:
-          </h3>
-          <p className="text-sm text-blue-800">
-            Shift each letter 3 positions backward in the alphabet. A becomes X,
-            B becomes Y, C becomes Z, D becomes A, etc.
-          </p>
-        </div>
-
         <div>
           <label
             htmlFor="caesarAnswer"
@@ -97,11 +87,6 @@ const AuthStep3CaesarCipher: React.FC<AuthStep3CaesarCipherProps> = ({
           </button>
         </div>
       </form>
-
-      <div className="mt-6 p-4 bg-gray-50 rounded-md">
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Answer:</h3>
-        <p className="text-sm text-gray-600">hello world</p>
-      </div>
     </div>
   );
 };
