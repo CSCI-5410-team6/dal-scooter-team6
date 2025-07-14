@@ -14,3 +14,14 @@ terraform {
     dynamodb_table = "dal-scooter-team-6-terraform-state-lock"
   }
 }
+
+provider "aws" {
+  region = "ca-central-1"
+}
+module "chat_bot" {
+  source = "../../modules/chat-bot"
+  bot_name = "DalScooterBotDev"
+  lambda_function_name = "General-Fulfillment-dev"
+  lambda_zip_path = "../../../../chatbot/lex-bot/fulfillment/general_fulfillment.py.zip"
+  environment = "dev"
+}

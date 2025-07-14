@@ -1,0 +1,38 @@
+{
+    "name": "RegisterIntent",
+    "version": "1",
+    "fulfillmentActivity": {
+        "type": "CodeHook",
+        "codeHook": {
+            "uri": "arn:aws:lambda:ca-central-1:account-id:function:GeneralFulfillment",
+            "messageVersion": "1.0"  
+        }
+    },
+    "sampleUtterances": [
+        "How do I register?",
+        "How to sign up?",
+        "How to use the app?",
+        "Where is the booking page?",
+        "How to navigate the site?",
+        "How do I create an account?",
+        "Where can I book a bike?" 
+    ],
+    "slots": [],
+    "confirmationPrompt": {
+        "maxAttempts": 2,
+        "messages" : [
+            {
+                "contentType" : "PlainText",
+                "content" : "Did I answer your question about navigation?"
+            }
+        ]
+    },
+    "rejectionStatement": {
+        "messages":[
+            {
+                "contentType": "PlainText",
+                "content": "Sorry, I couldn't help with that. Would you like to try again?"
+            }
+        ]
+    }
+}
