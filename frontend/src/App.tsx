@@ -1,29 +1,34 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import AuthFlow from "./components/auth/AuthFlow";
+import { AuthProvider } from "./contextStore/AuthContext";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import SignUp from "./components/auth/SignUp";
 import PublicDashboard from "./components/dashboard/PublicDashboard";
+import EmailOTPVerification from "./components/auth/EmailOTPVerification";
+import AuthStep1Credentials from "./components/auth/AuthStep1Credentials";
+import AuthChallenge from "./components/auth/AuthChallenge"; 
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
+ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
   children,
-}) => {
-  const { authState } = useAuth();
+ }) => {
+   // const { authState } = useAuth();
 
-  if (!authState.isAuthenticated) {
-    return <PublicDashboard />;
-  }
+//   if (!authState.isAuthenticated) {
+//     return <PublicDashboard />;
+//   }
 
   return <>{children}</>;
 };
 
 // Main App Content
+
 const AppContent: React.FC = () => {
   return (
     <Routes>
-      <Route path="/login" element={<AuthFlow />} />
+      <Route path="/login" element={<AuthStep1Credentials />} />
       <Route path="/signup" element={<SignUp />} />
+      <Route path="/verify-email" element={<EmailOTPVerification />} />
+      <Route path="/auth-challenge" element={<AuthChallenge />} />
       <Route
         path="/dashboard"
         element={
@@ -37,11 +42,10 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Main App Component
 const App: React.FC = () => {
   return (
     <Router>
-      <AuthProvider>
+      <AuthProvider> 
         <AppContent />
       </AuthProvider>
     </Router>

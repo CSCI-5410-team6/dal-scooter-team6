@@ -1,3 +1,4 @@
+// we cam remove this one we are not using it
 import React, { createContext, useContext, useReducer, ReactNode } from "react";
 import { AuthState, User, AuthStep } from "../types";
 import { loginCredentials, caesarPuzzle, dummyUsers } from "../data/dummyData";
@@ -10,7 +11,7 @@ interface AuthContextType {
   logout: () => void;
   resetAuth: () => void;
 }
-
+ 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const initialState: AuthState = {
