@@ -481,7 +481,7 @@ const signUpResult= await Auth.signUp({
                 {cipher.encodedString}
               </p>
               <p className="text-xs text-gray-500 mt-2">
-                Hint: This is a Caesar cipher with a shift of {cipher.key}
+                Hint: This is a Caesar cipher with a shift of -{cipher.key}
               </p>
               <button
                 type="button"
