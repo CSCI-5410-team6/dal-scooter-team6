@@ -25,3 +25,18 @@ module "chat_bot" {
   lambda_zip_path = "../../../../chatbot/lex-bot/fulfillment/general_fulfillment.py.zip"
   environment = "dev"
 }
+module "cognito" {
+  source = "../../modules/cognito"
+  region           = var.aws_region
+  user_pool_name   = "DALScooterUserPoolDev"
+  sns_topic_name   = "DALScooterNotificationsDev"
+
+  project_name = var.project_name    
+  environment  = var.environment     
+}
+
+variable "environment" {
+  description = "The environment name (e.g., dev, prod)"
+  type        = string
+  default     = "dev"
+}
