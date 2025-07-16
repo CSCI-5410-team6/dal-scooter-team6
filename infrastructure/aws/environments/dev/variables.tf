@@ -17,3 +17,13 @@ variable "environments" {
   type        = string
   default     = "dev"
 }
+
+variable "user_pool_name" {
+  description = "Name of the Cognito User Pool"
+  default     = "DALScooterUserPool"
+}
+
+variable "sns_topic_name" {
+  description = "Name of the SNS Topic"
+  default     = "DALScooterNotifications"
+}
