@@ -1,0 +1,33 @@
+{
+    "name": "NavigationIntent",
+    "description": "Intent to navigate the website",
+    "slots": [
+      {
+        "name": "Page",
+        "slotTypeName": "PageType",
+        "valueElicitationSetting": {
+          "slotElicitationStyle": "Default",
+          "promptSpecification": {
+            "messageGroups": [
+              {
+                "message": {
+                  "plainTextMessage": {
+                    "value": "Which page would you like to navigate to?"
+                  }
+                }
+              }
+            ],
+            "maxRetries": 2
+          }
+        }
+      }
+    ],
+    "sampleUtterances": [
+      "Go to homepage",
+      "Show me the booking page",
+      "Open the dashboard"
+    ],
+    "fulfillmentCodeHook": {
+      "enabled": true
+    }
+  }

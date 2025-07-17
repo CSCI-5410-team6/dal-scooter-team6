@@ -1,86 +1,79 @@
 import json
+import boto3
+import os
+
+dynamodb = boto3.resource('dynamodb')
+sns = boto3.client('sns')
 
 def lambda_handler(event, context):
-    # Extract intent name and user input from Lex V2 event structure
-    intent_name = event.get('sessionState', {}).get('intent', {}).get('name')
-    user_input = event.get('inputTranscript', '').lower()
+    intent_name = event['sessionState']['intent']['name']
+    user_type = event['sessionState']['sessionAttributes'].get('userType', 'guest')
+    booking_ref = event['sessionState']['intent']['slots'].get('BookingReference', {}).get('value', {}).get('interpretedValue', '')
 
-    if intent_name == 'RegisterIntent':
-        # Define responses for different types of input
-        greeting_keywords = ["hi", "hello", "hey", "greetings"]
-        responses = {
-            "register": "To register, go to the Sign-Up page, enter your email, password, and personal details, then submit the form.",
-            "sign up": "To sign up, navigate to the Sign-Up page and provide your email, password, and contact information.",
-            "use the app": "To use the app, start by registering on the Sign-Up page, then log in to access booking and other features.",
-            "booking page": "The booking page is accessible from the main menu after logging in. Click 'Book a Bike' to start.",
-            "navigate the site": "Use the main menu to access key sections: Sign-Up for registration, Login for access, or Book a Bike for reservations.",
-            "create an account": "To create an account, go to the Sign-Up page and fill out the registration form with your details.",
-            "book a bike": "To book a bike, log in and select 'Book a Bike' from the main menu to choose your rental options."
-        }
-
-        # Handle greeting inputs
-        if any(keyword in user_input for keyword in greeting_keywords):
-            capabilities = [
-                "Register for an account",
-                "Learn how to use the app",
-                "Find the booking page",
-                "Get help navigating the site",
-                "Book a bike"
-            ]
-            response_text = f"Hello! Welcome to Dal Scooter, I can help you with: {', '.join(capabilities)}. How can I assist you today?"
-        
-        # Handle registration-related queries
-        else:
-            response_text = "I'm here to help! Could you clarify your question about navigating the app?"
-            for key, value in responses.items():
-                if key in user_input:
-                    response_text = value
-                    break
-
+    if intent_name == 'NavigationIntent':
+        page = event['sessionState']['intent']['slots'].get('Page', {}).get('value', {}).get('interpretedValue', 'homepage')
         return {
             'sessionState': {
-                'dialogAction': {
-                    'type': 'Close'
-                },
-                'intent': {
-                    'name': 'RegisterIntent',
-                    'state': 'Fulfilled'
-                }
+                'dialogAction': {'type': 'Close'},
+                'intent': {'name': intent_name, 'state': 'Fulfilled'}
             },
-            'messages': [
-                {
-                    'contentType': 'PlainText',
-                    'content': response_text
-                }
-            ],
-            'responseContentType': 'application/json'
+            'messages': [{'contentType': 'PlainText', 'content': f'Navigating to {page}.'}]
         }
     
-    # Default case for unexpected intents (should not occur with single intent setup)
-    example_questions = [
-        "How do I register?",
-        "How to sign up?",
-        "Where is the booking page?",
-        "How to use the app?",
-        "How do I book a bike?"
-    ]
-    response_text = f"Sorry, I could not process your request. You can try asking: {', '.join(example_questions)}."
+    if intent_name == 'BookingIntent' and booking_ref:
+        if user_type == 'guest':
+            return {
+                'sessionState': {
+                    'dialogAction': {'type': 'Close'},
+                    'intent': {'name': intent_name, 'state': 'Failed'}
+                },
+                'messages': [{'contentType': 'PlainText', 'content': 'Please log in to access booking details.'}]
+            }
+        table = dynamodb.Table('bookings-table')
+        response = table.get_item(Key={'bookingId': booking_ref})
+        if 'Item' in response:
+            item = response['Item']
+            if user_type == 'customer':
+                return {
+                    'sessionState': {
+                        'dialogAction': {'type': 'Close'},
+                        'intent': {'name': intent_name, 'state': 'Fulfilled'}
+                    },
+                    'messages': [{'contentType': 'PlainText', 'content': f"Bike Access Code: {item['accessCode']}, Duration: {item['duration']} minutes"}]
+                }
+            elif user_type == 'franchise_operator':
+                return {
+                    'sessionState': {
+                        'dialogAction': {'type': 'Close'},
+                        'intent': {'name': intent_name, 'state': 'Fulfilled'}
+                    },
+                    'messages': [{'contentType': 'PlainText', 'content': f"Bike Number: {item['bikeNumber']}, Duration: {item['duration']} minutes"}]
+                }
+        return {
+            'sessionState': {
+                'dialogAction': {'type': 'Close'},
+                'intent': {'name': intent_name, 'state': 'Failed'}
+            },
+            'messages': [{'contentType': 'PlainText', 'content': 'Invalid booking reference.'}]
+        }
     
+    if intent_name == 'SupportIntent' and user_type == 'customer':
+        sns.publish(
+            TopicArn=os.environ['SNS_TOPIC_ARN'],
+            Message=f"Customer support request for booking {booking_ref or 'unknown'}"
+        )
+        return {
+            'sessionState': {
+                'dialogAction': {'type': 'Close'},
+                'intent': {'name': intent_name, 'state': 'Fulfilled'}
+            },
+            'messages': [{'contentType': 'PlainText', 'content': 'Support request sent to franchise.'}]
+        }
+
     return {
         'sessionState': {
-            'dialogAction': {
-                'type': 'Close'
-            },
-            'intent': {
-                'name': intent_name,
-                'state': 'Failed'
-            }
+            'dialogAction': {'type': 'Close'},
+            'intent': {'name': intent_name, 'state': 'Failed'}
         },
-        'messages': [
-            {
-                'contentType': 'PlainText',
-                'content': response_text
-            }
-        ],
-        'responseContentType': 'application/json'
+        'messages': [{'contentType': 'PlainText', 'content': 'Sorry, I cannot assist with that request.'}]
     }

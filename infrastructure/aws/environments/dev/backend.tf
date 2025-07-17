@@ -35,6 +35,14 @@ module "cognito" {
   environment  = var.environment     
 }
 
+module "api_gateway" {
+  source                = "../../modules/api_gateway"
+  api_name              = "DALScooterChatbotAPI"
+  lambda_function_name  = "chatbot_handler"
+  cognito_user_pool_arn = module.cognito.user_pool_arn
+  environment           = var.environment
+}
+
 variable "environment" {
   description = "The environment name (e.g., dev, prod)"
   type        = string

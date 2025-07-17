@@ -1,0 +1,17 @@
+{
+    "TableName": "bookings-table",
+    "KeySchema": [
+      { "AttributeName": "bookingId", "KeyType": "HASH" }
+    ],
+    "AttributeDefinitions": [
+      { "AttributeName": "bookingId", "AttributeType": "S" }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "Attributes": [
+      { "Name": "accessCode", "Type": "S" },
+      { "Name": "bikeNumber", "Type": "S" },
+      { "Name": "duration", "Type": "N" },
+      { "Name": "userId", "Type": "S" },
+      { "Name": "franchiseId", "Type": "S" }
+    ]
+  }
