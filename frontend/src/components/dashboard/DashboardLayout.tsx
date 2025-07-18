@@ -4,7 +4,7 @@ import { UserType } from "../../types";
 import GuestDashboard from "./GuestDashboard";
 import CustomerDashboard from "./CustomerDashboard";
 import AdminDashboard from "./AdminDashboard";
-import Chatbot from "../chatbot/Chatbot";
+import Chatbot from "../chatbot/ChatWidget";
 
 const DashboardLayout: React.FC = () => {
   const { authState, logout } = useAuth();

@@ -389,3 +389,15 @@ resource "aws_lambda_permission" "cognito_permission_post_authentication" {
   principal     = "cognito-idp.amazonaws.com"
   source_arn    = aws_cognito_user_pool.dalscooter_user_pool.arn
 }
+
+resource "aws_cognito_identity_pool" "dalscooter_identity_pool" {
+  identity_pool_name               = "DALScooterIdentityPool-${var.environment}"
+  allow_unauthenticated_identities = false
+
+  cognito_identity_providers {
+    client_id = aws_cognito_user_pool_client.dalscooter_client.id
+    provider_name = aws_cognito_user_pool.dalscooter_user_pool.endpoint
+  }
+
+  tags = local.common_tags
+}

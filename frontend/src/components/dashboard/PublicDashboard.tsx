@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { dummyScooters } from "../../data/dummyData";
-import Chatbot from "../chatbot/Chatbot";
+import Chatbot from "../chatbot/ChatWidget";
 
 const PublicDashboard: React.FC = () => {
   const navigate = useNavigate();

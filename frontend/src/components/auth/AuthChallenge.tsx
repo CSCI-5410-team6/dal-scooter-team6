@@ -1,10 +1,8 @@
-
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Auth } from 'aws-amplify';
-import '../../config/amplifyConfig'; // Import the config
-import { useAuthContext } from "../../contextStore/AuthContext"; // Import Auth context
+import { Auth, API } from 'aws-amplify';
+import '../../config/amplifyConfig';
+import { useAuthContext } from "../../contextStore/AuthContext";
 
 const AuthChallenge: React.FC = () => {
   const { cognitoUser, setCognitoUser } = useAuthContext();
@@ -12,20 +10,16 @@ const AuthChallenge: React.FC = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState("question"); // 'question' or 'caesar'
+  const [view, setView] = useState("question");
   const [challengeSession, setChallengeSession] = useState(null);
-  const [challengeType, setChallengeType] = useState("");
   const [challengeQuestion, setChallengeQuestion] = useState("");
   const [challengeClue, setChallengeClue] = useState("");
   const [challengeShift, setChallengeShift] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
-  const { email: stateEmail, challengeSession: initialSession, challengeParameters } = location.state || {};
-
-  const email = stateEmail || localStorage.getItem("authEmail") || "";
+  const { email, challengeSession: initialSession, challengeParameters } = location.state || {};
 
   useEffect(() => {
-    console.log("Challenge parameters received:", challengeParameters);
     if (challengeParameters) {
       if (challengeParameters.question) {
         setChallengeQuestion(challengeParameters.question);
@@ -54,36 +48,36 @@ const AuthChallenge: React.FC = () => {
     }
 
     try {
-      console.log('challenge session', challengeSession || cognitoUser);
-      console.log('challenge answer', challengeAnswer);
-      
       const sessionToUse = challengeSession || cognitoUser;
       const response = await Auth.sendCustomChallengeAnswer(sessionToUse, challengeAnswer.trim());
-      console.log('Challenge response:', response);
-
+      
       if (response.challengeName === 'CUSTOM_CHALLENGE') {
         setChallengeSession(response);
-        setCognitoUser(response); // Update context
-        setChallengeType(response.challengeParam.challengeMetadata);
-        console.log('Response ::::::::', response);
-
-        if (response.challengeParam.challengeMetadata === 'QUESTION_CHALLENGE') {
-          setChallengeQuestion(response.challengeParam.publicChallengeParameters.question);
+        setCognitoUser(response);
+        if (response.challengeParam?.question) {
+          setChallengeQuestion(response.challengeParam.question);
           setView('question');
-        } else {
-          console.log('challengeParam ::::::::', response.challengeParam);
-          setChallengeClue(response.challengeParam.clue);
-          setChallengeShift(response.challengeParam.shift);
+        } else if (response.challengeParam?.cipherChallenge) {
+          setChallengeClue(response.challengeParam.cipherChallenge);
+          setChallengeShift(response.challengeParam.cipherShift);
           setView('caesar');
         }
         setChallengeAnswer('');
       } else {
+        await API.post('snsApi', '/publish', {
+          body: {
+            TopicArn: process.env.REACT_APP_SNS_SIGNIN_TOPIC_ARN,
+            Message: JSON.stringify({
+              email,
+              event: 'SIGN_IN',
+              timestamp: new Date().toISOString()
+            })
+          }
+        });
         setSuccess('Login successful!');
-        console.log("🎉 Authentication successful!");
         setTimeout(() => navigate("/dashboard"), 1500);
       }
     } catch (err: any) {
-      console.error('Challenge error:', err);
       setError('Challenge response failed. Please try again.');
       setChallengeAnswer('');
     } finally {
@@ -105,19 +99,16 @@ const AuthChallenge: React.FC = () => {
           </h2>
           <p className="text-gray-600">Step 2: Security Question</p>
         </div>
-
         {success && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-center">
             {success}
           </div>
         )}
-
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-center">
             {error}
           </div>
         )}
-
         <form onSubmit={handleChallengeAnswer} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -127,7 +118,6 @@ const AuthChallenge: React.FC = () => {
               {challengeQuestion || "Loading question..."}
             </div>
           </div>
-
           <div>
             <label htmlFor="challengeAnswer" className="block text-sm font-medium text-gray-700 mb-1">
               Your Answer
@@ -144,7 +134,6 @@ const AuthChallenge: React.FC = () => {
               autoFocus
             />
           </div>
-
           <div className="flex space-x-3 pt-4">
             <button
               type="button"
@@ -169,7 +158,6 @@ const AuthChallenge: React.FC = () => {
             </button>
           </div>
         </form>
-
         <div className="mt-6 text-center">
           <p className="text-xs text-gray-500">
             Having trouble? Please contact support for assistance.
@@ -191,33 +179,16 @@ const AuthChallenge: React.FC = () => {
           </h2>
           <p className="text-gray-600">Step 3: Caesar Cipher Challenge</p>
         </div>
-
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Final Authentication Step
-          </h3>
-          <p className="text-sm text-gray-600">
-            Complete the final authentication step
-          </p>
-        </div>
-
         {success && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-center">
             {success}
           </div>
         )}
-
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-center">
             {error}
           </div>
         )}
-
         <form onSubmit={handleChallengeAnswer} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -232,7 +203,6 @@ const AuthChallenge: React.FC = () => {
               </p>
             </div>
           </div>
-
           <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
             <h3 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -247,7 +217,6 @@ const AuthChallenge: React.FC = () => {
               Example: If shift is 3, then D→A, E→B, F→C, etc.
             </p>
           </div>
-
           <div>
             <label htmlFor="challengeAnswer" className="block text-sm font-medium text-gray-700 mb-1">
               Your Answer
@@ -264,7 +233,6 @@ const AuthChallenge: React.FC = () => {
               autoFocus
             />
           </div>
-
           <div className="flex space-x-3 pt-4">
             <button
               type="button"
@@ -289,7 +257,6 @@ const AuthChallenge: React.FC = () => {
             </button>
           </div>
         </form>
-
         <div className="mt-6 text-center">
           <p className="text-xs text-gray-500">
             Having trouble? Please contact support for assistance.

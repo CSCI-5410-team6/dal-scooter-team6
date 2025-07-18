@@ -33,7 +33,7 @@ module "sns" {
   environment   = var.environment
 }
 module "lex" {
-  source              = "../../modules/lex"
+  source              = "../../modules/chat-bot"
   region              = "ca-central-1"
   bot_name            = "DalScooterBot"
   lambda_function_name = "GeneralFulfillment"
@@ -51,14 +51,6 @@ module "cognito" {
   project_name      = var.project_name
   environment       = var.environment
   bookings_table_arn = module.dynamodb.bookings_table_arn
-}
-
-module "api_gateway" {
-  source                = "../../modules/api_gateway"
-  api_name              = "DALScooterChatbotAPI"
-  lambda_function_name  = "chatbot_handler"
-  cognito_user_pool_arn = module.cognito.user_pool_arn
-  environment           = var.environment
 }
 
 variable "environment" {

@@ -4,6 +4,7 @@ import { Auth } from 'aws-amplify';
 import '../../config/amplifyConfig';
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { useAuthContext } from "../../contextStore/AuthContext";
+
 export let tempUser: any = null;
 
 const AuthStep1Credentials: React.FC = () => {
@@ -20,7 +21,6 @@ const AuthStep1Credentials: React.FC = () => {
     setError("");
     setLoading(true);
 
-    // Validation
     if (!email || !password) {
       setError("Please fill in all fields");
       setLoading(false);
@@ -34,91 +34,36 @@ const AuthStep1Credentials: React.FC = () => {
     }
 
     try {
-      console.log("Attempting to sign in with:", { email });
-
-      // Initiate authentication with Cognito
       const session = await Auth.signIn({
         username: email,
         password: password
       });
-      setCognitoUser(session); 
-      console.log("SignIn response:", session);
-
-      // Handle different challenge states
+      setCognitoUser(session);
+      localStorage.setItem("authEmail", email);
       switch (session.challengeName) {
-        case 'PASSWORD_VERIFIER':
-          // Password verification successful, proceed to Q&A challenge
-          console.log("Password verified, proceeding to Q&A challenge");
+        case 'CUSTOM_CHALLENGE':
+          tempUser = session;
           navigate("/auth-challenge", {
             state: {
               email,
               challengeSession: session,
-              challengeName: 'CUSTOM_CHALLENGE_QA',
               challengeParameters: session.challengeParam || {},
             },
           });
           break;
-
-        case 'CUSTOM_CHALLENGE':
-          // This could be either Q&A or Cipher challenge
-          // Check private challenge parameters to determine which one
-          tempUser = session;
-
-          if (session.challengeParam?.question) {
-            console.log("Q&A challenge detected");
-
-            // 🔐 Store the Session token in localStorage
-           
-
-            navigate("/auth-challenge", {
-              state: {
-                email,
-                challengeName: 'CUSTOM_CHALLENGE_QA',
-                challengeParameters: session.challengeParam || {},
-              },
-            });
-          } else if (session.challengeParam?.cipherChallenge) {
-            console.log("Cipher challenge detected");
-            navigate("/auth-challenge", {
-              state: {
-                email,
-                challengeSession: session,
-                challengeName: 'CUSTOM_CHALLENGE_CIPHER',
-                challengeParameters: session.challengeParam || {},
-              },
-            });
-          }
-          break;
-
         case 'NEW_PASSWORD_REQUIRED':
           setError("Password reset required. Please reset your password.");
           break;
-
         case 'MFA_SETUP':
         case 'SMS_MFA':
         case 'SOFTWARE_TOKEN_MFA':
           setError("MFA setup required. Please complete MFA setup.");
           break;
-
-        case null:
-        case undefined:
-          // No challenge means authentication is complete
-          try {
-            await Auth.currentSession(); // Verify tokens are available
-            navigate("/dashboard");
-          } catch (sessionError) {
-            console.error("Token/session not available:", sessionError);
-            setError("Login succeeded but session could not be established.");
-          }
-          break;
-
         default:
-          console.warn("Unhandled challenge:", session.challengeName);
-          setError(`Unsupported challenge: ${session.challengeName}`);
+          await Auth.currentSession();
+          navigate("/dashboard");
       }
-
     } catch (error: any) {
-      console.error("Login error:", error);
       handleAuthError(error);
     } finally {
       setLoading(false);
@@ -143,6 +88,7 @@ const AuthStep1Credentials: React.FC = () => {
       setError(`Login failed: ${error.message || 'Unknown error occurred'}`);
     }
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
@@ -155,19 +101,14 @@ const AuthStep1Credentials: React.FC = () => {
           </h2>
           <p className="text-gray-600">Step 1: Login Credentials</p>
         </div>
-
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-center">
             {error}
           </div>
         )}
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               Email Address
             </label>
             <input
@@ -181,12 +122,8 @@ const AuthStep1Credentials: React.FC = () => {
               disabled={loading}
             />
           </div>
-
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
             <div className="relative">
@@ -216,19 +153,17 @@ const AuthStep1Credentials: React.FC = () => {
               </button>
             </div>
           </div>
-
           <button
             type="submit"
             disabled={loading}
             className={`w-full py-2 px-4 rounded-md font-semibold transition-colors ${loading
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
               } text-white`}
           >
             {loading ? 'Signing In...' : 'Continue to Step 2'}
           </button>
         </form>
-
         <div className="mt-6 text-center">
           <span className="text-sm text-gray-600">
             Don't have an account?
@@ -241,7 +176,6 @@ const AuthStep1Credentials: React.FC = () => {
             Sign Up
           </button>
         </div>
-
         <div className="mt-4 text-center">
           <button
             onClick={() => navigate("/forgot-password")}
@@ -257,4 +191,3 @@ const AuthStep1Credentials: React.FC = () => {
 };
 
 export default AuthStep1Credentials;
-

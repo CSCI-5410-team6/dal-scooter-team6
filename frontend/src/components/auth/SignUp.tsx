@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-// @ts-ignore
 import { Auth } from 'aws-amplify';
 
 const securityQuestions = [
@@ -19,7 +18,6 @@ const userTypes = [
   { value: "admin", label: "Franchise (Admin)" },
 ];
 
-// Caesar cipher function
 const caesarCipher = (text: string, shift: number): string => {
   return text
     .split("")
@@ -34,13 +32,11 @@ const caesarCipher = (text: string, shift: number): string => {
     .join("");
 };
 
-// Generate random string
 const generateRandomString = (): string => {
   const words = ["HELLO", "WORLD", "CIPHER", "SECRET", "DECODE", "PUZZLE", "HIDDEN", "MYSTERY"];
   return words[Math.floor(Math.random() * words.length)];
 };
 
-// Generate random shift (1-5)
 const generateRandomShift = (): number => {
   return Math.floor(Math.random() * 5) + 1;
 };
@@ -72,204 +68,120 @@ const SignUp: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Generate cipher challenge on component mount
   useEffect(() => {
     const originalString = generateRandomString();
     const key = generateRandomShift();
     const encodedString = caesarCipher(originalString, key);
-
-    setCipher({
-      originalString,
-      encodedString,
-      key,
-    });
+    setCipher({ originalString, encodedString, key });
   }, []);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError("");
-  setSuccess(false);
-  setLoading(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess(false);
+    setLoading(true);
 
-  console.log("Form submitted!", form);
-  console.log("Cipher data:", cipher);
+    if (
+      !form.name ||
+      !form.email ||
+      !form.password ||
+      !form.confirmPassword ||
+      !form.securityAnswer1 ||
+      !form.securityAnswer2 ||
+      !form.securityAnswer3 ||
+      !form.cipherAnswer
+    ) {
+      setError("Please fill in all fields.");
+      setLoading(false);
+      return;
+    }
 
-  // Validation
-  if (
-    !form.name ||
-    !form.email ||
-    !form.password ||
-    !form.confirmPassword ||
-    !form.securityAnswer1 ||
-    !form.securityAnswer2 ||
-    !form.securityAnswer3 ||
-    !form.cipherAnswer
-  ) {
-    console.log("Validation failed: Missing fields");
-    setError("Please fill in all fields.");
-    setLoading(false);
-    return;
-  }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) {
+      setError("Please enter a valid email address.");
+      setLoading(false);
+      return;
+    }
 
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) {
-    console.log("Validation failed: Invalid email");
-    setError("Please enter a valid email address.");
-    setLoading(false);
-    return;
-  }
+    if (form.password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      setLoading(false);
+      return;
+    }
 
-  if (form.password.length < 8) {
-    console.log("Validation failed: Password too short");
-    setError("Password must be at least 8 characters.");
-    setLoading(false);
-    return;
-  }
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match.");
+      setLoading(false);
+      return;
+    }
 
-  if (form.password !== form.confirmPassword) {
-    console.log("Validation failed: Passwords don't match");
-    setError("Passwords do not match.");
-    setLoading(false);
-    return;
-  }
+    const questions = [form.securityQuestion1, form.securityQuestion2, form.securityQuestion3];
+    if (new Set(questions).size !== questions.length) {
+      setError("Please select different security questions.");
+      setLoading(false);
+      return;
+    }
 
-  const questions = [
-    form.securityQuestion1,
-    form.securityQuestion2,
-    form.securityQuestion3,
-  ];
-  if (new Set(questions).size !== questions.length) {
-    console.log("Validation failed: Duplicate security questions");
-    setError("Please select different security questions.");
-    setLoading(false);
-    return;
-  }
+    if (form.cipherAnswer.toUpperCase() !== cipher.originalString) {
+      setError("Cipher answer is incorrect. Please try again.");
+      setLoading(false);
+      return;
+    }
 
-  console.log("Cipher check:", {
-    userAnswer: form.cipherAnswer.toUpperCase(),
-    correctAnswer: cipher.originalString,
-    match: form.cipherAnswer.toUpperCase() === cipher.originalString,
-  });
+    try {
+      const questionsData = {
+        q1: form.securityQuestion1,
+        a1: form.securityAnswer1.toLowerCase(),
+        q2: form.securityQuestion2,
+        a2: form.securityAnswer2.toLowerCase(),
+        q3: form.securityQuestion3,
+        a3: form.securityAnswer3.toLowerCase(),
+      };
+      const cipherData = {
+        cipherChallenge: cipher.encodedString,
+        cipherKey: String(cipher.key),
+        cipherResponse: form.cipherAnswer.toUpperCase(),
+      };
 
-  if (form.cipherAnswer.toUpperCase() !== cipher.originalString) {
-    console.log("Validation failed: Incorrect cipher answer");
-    setError("Cipher answer is incorrect. Please try again.");
-    setLoading(false);
-    return;
-  }
+      await Auth.signUp({
+        username: form.email,
+        password: form.password,
+        attributes: {
+          email: form.email,
+          name: form.name,
+          'custom:userType': form.userType,
+          'custom:questions': JSON.stringify(questionsData),
+          'custom:cipher': JSON.stringify(cipherData),
+        },
+      });
 
-  if (
-    cipher.key === undefined ||
-    cipher.key === null ||
-    isNaN(cipher.key)
-  ) {
-    console.error("Validation failed: cipher.key is missing or invalid", cipher);
-    setError("Internal error: Cipher key is missing. Please refresh and try again.");
-    setLoading(false);
-    return;
-  }
-
-  console.log("All validations passed, sending request...");
-
-  try {
-    const cipherData = {
-      cipherChallenge: cipher.encodedString || "",
-      cipherKey: String(cipher.key), // Safe conversion to string
-      cipherResponse: form.cipherAnswer.toUpperCase(),
-    };
-
-    const questionsData = {
-      q1: form.securityQuestion1,
-      a1: form.securityAnswer1,
-      q2: form.securityQuestion2,
-      a2: form.securityAnswer2,
-      q3: form.securityQuestion3,
-      a3: form.securityAnswer3,
-    };
-
-    console.log("Prepared cipherData:", cipherData);
-    console.log("Prepared questionsData:", questionsData);
-
-const signUpResult= await Auth.signUp({
-  username: form.email,
-  password: form.password,
-  attributes: {
-    email: form.email,
-    name: form.name,
-    'custom:userType': form.userType,
-  },
-  clientMetadata: {
-    cipherData: JSON.stringify(cipherData),
-    questions: JSON.stringify(questionsData),
-    userType: form.userType,
-  },
-  validationData: {
-    // Optional, usually ignored by Cognito but you can still include it
-    cipherData: JSON.stringify(cipherData),
-    questions: JSON.stringify(questionsData),
-    userType: form.userType,
-  }
-});
-
-    console.log("Final SignUp payload:", JSON.stringify(signUpResult, null, 2));
-
-    console.log("SignUp response:", signUpResult);
-
-    if (!signUpResult.userConfirmed) {
       setSuccess(true);
       setTimeout(() => {
         navigate("/verify-email", { state: { email: form.email } });
       }, 2000);
-    } else {
-      setSuccess(true);
-      setTimeout(() => {
-        navigate("/login");
-      }, 2000);
+    } catch (error: any) {
+      if (error.name === "UsernameExistsException") {
+        setError("An account with this email already exists.");
+      } else if (error.name === "InvalidPasswordException") {
+        setError("Password does not meet requirements. Must include uppercase, lowercase, number, and special character.");
+      } else if (error.name === "InvalidParameterException") {
+        setError("Invalid input parameters. Please check your information.");
+      } else {
+        setError(`Sign-up failed: ${error.message || 'Unknown error occurred'}`);
+      }
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    console.error("Sign-up error:", error);
-    console.error("Error details:", {
-      name: error.name,
-      message: error.message,
-      code: error.code,
-      stack: error.stack
-    });
-
-    if (error.name === "UsernameExistsException") {
-      setError("An account with this email already exists.");
-    } else if (error.name === "InvalidPasswordException") {
-      setError("Password does not meet requirements. Must include uppercase, lowercase, number, and special character.");
-    } else if (error.name === "InvalidParameterException") {
-      setError("Invalid input parameters. Please check your information.");
-    } else if (error.message?.includes("Pre Sign-up validation failed")) {
-      const errorMatch = error.message.match(/Pre Sign-up validation failed: (.+)/);
-      const specificError = errorMatch ? errorMatch[1] : "Validation failed";
-      setError(`Validation failed: ${specificError}`);
-    } else {
-      setError(`Sign-up failed: ${error.message || 'Unknown error occurred'}`);
-    }
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   const regenerateCipher = () => {
     const originalString = generateRandomString();
     const key = generateRandomShift();
     const encodedString = caesarCipher(originalString, key);
-
-    setCipher({
-      originalString,
-      encodedString,
-      key,
-    });
-
+    setCipher({ originalString, encodedString, key });
     setForm({ ...form, cipherAnswer: "" });
   };
 
@@ -282,21 +194,17 @@ const signUpResult= await Auth.signUp({
             <span className="text-gray-900">Scooter</span>
           </span>
         </h2>
-        
         {success && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-center">
-            Registration successful! Redirecting to login...
+            Registration successful! Redirecting to verification...
           </div>
         )}
-        
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-center">
             {error}
           </div>
         )}
-        
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -310,9 +218,9 @@ const signUpResult= await Auth.signUp({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter your full name"
                 required
+                disabled={loading}
               />
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email
@@ -325,10 +233,10 @@ const signUpResult= await Auth.signUp({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="you@email.com"
                 required
+                disabled={loading}
               />
             </div>
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -342,9 +250,9 @@ const signUpResult= await Auth.signUp({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Password"
                 required
+                disabled={loading}
               />
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Confirm Password
@@ -357,10 +265,10 @@ const signUpResult= await Auth.signUp({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Confirm Password"
                 required
+                disabled={loading}
               />
             </div>
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               User Type
@@ -370,6 +278,7 @@ const signUpResult= await Auth.signUp({
               value={form.userType}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
             >
               {userTypes.map((type) => (
                 <option key={type.value} value={type.value}>
@@ -378,13 +287,9 @@ const signUpResult= await Auth.signUp({
               ))}
             </select>
           </div>
-          
-          {/* Security Questions */}
           <div className="border-t pt-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Security Questions</h3>
-            
             <div className="space-y-4">
-              {/* Security Question 1 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Security Question 1
@@ -394,6 +299,7 @@ const signUpResult= await Auth.signUp({
                   value={form.securityQuestion1}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                  disabled={loading}
                 >
                   {securityQuestions.map((q) => (
                     <option key={q} value={q}>
@@ -409,10 +315,9 @@ const signUpResult= await Auth.signUp({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Your answer"
                   required
+                  disabled={loading}
                 />
               </div>
-              
-              {/* Security Question 2 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Security Question 2
@@ -422,6 +327,7 @@ const signUpResult= await Auth.signUp({
                   value={form.securityQuestion2}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                  disabled={loading}
                 >
                   {securityQuestions.map((q) => (
                     <option key={q} value={q}>
@@ -437,10 +343,9 @@ const signUpResult= await Auth.signUp({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Your answer"
                   required
+                  disabled={loading}
                 />
               </div>
-              
-              {/* Security Question 3 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Security Question 3
@@ -450,6 +355,7 @@ const signUpResult= await Auth.signUp({
                   value={form.securityQuestion3}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                  disabled={loading}
                 >
                   {securityQuestions.map((q) => (
                     <option key={q} value={q}>
@@ -465,12 +371,11 @@ const signUpResult= await Auth.signUp({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Your answer"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
           </div>
-          
-          {/* Cipher Challenge */}
           <div className="border-t pt-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Cipher Challenge</h3>
             <div className="bg-gray-50 p-4 rounded-md mb-4">
@@ -487,6 +392,7 @@ const signUpResult= await Auth.signUp({
                 type="button"
                 onClick={regenerateCipher}
                 className="mt-2 text-blue-600 hover:underline text-sm"
+                disabled={loading}
               >
                 Generate New Cipher
               </button>
@@ -503,18 +409,21 @@ const signUpResult= await Auth.signUp({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter the decoded word"
                 required
+                disabled={loading}
               />
             </div>
           </div>
-          
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-semibold"
+            disabled={loading}
+            className={`w-full py-2 px-4 rounded-md font-semibold transition-colors ${loading
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+            }`}
           >
-            Sign Up
+            {loading ? 'Signing Up...' : 'Sign Up'}
           </button>
         </form>
-        
         <div className="mt-6 text-center">
           <span className="text-sm text-gray-600">
             Already have an account?
@@ -522,6 +431,7 @@ const signUpResult= await Auth.signUp({
           <button
             onClick={() => navigate("/login")}
             className="ml-2 text-blue-600 hover:underline text-sm font-medium"
+            disabled={loading}
           >
             Log In
           </button>
@@ -532,4 +442,3 @@ const signUpResult= await Auth.signUp({
 };
 
 export default SignUp;
-
