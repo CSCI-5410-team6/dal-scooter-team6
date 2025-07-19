@@ -21,3 +21,8 @@ variable "environment" {
   description = "Environment name tag"
   type        = string
 }
+
+variable "bookings_table_arn" {
+  description = "ARN of the bookings DynamoDB table"
+  type        = string
+}

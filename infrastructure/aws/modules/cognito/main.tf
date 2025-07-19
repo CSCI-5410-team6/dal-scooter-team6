@@ -1,8 +1,17 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
 provider "aws" {
   region = var.region
 }
 
-# DynamoDB Table
+# DynamoDB Table for Users
 resource "aws_dynamodb_table" "dalscooter_users" {
   name         = "DALScooterUsers1"
   billing_mode = "PAY_PER_REQUEST"
@@ -21,7 +30,7 @@ resource "aws_dynamodb_table" "dalscooter_users" {
 
 # SNS Topic
 resource "aws_sns_topic" "dalscooter_notifications" {
-  name = var.sns_topic_name
+  name = "DALScooterNotifications-${var.environment}"
 
   tags = {
     Project     = var.project_name
@@ -31,7 +40,7 @@ resource "aws_sns_topic" "dalscooter_notifications" {
 
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_role" {
-  name = "DALScooterLambdaRole"
+  name = "DALScooterLambdaRole-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -47,7 +56,7 @@ resource "aws_iam_role" "lambda_role" {
 
 # IAM Policy for Lambda
 resource "aws_iam_policy" "lambda_policy" {
-  name = "DALScooterLambdaPolicy"
+  name = "DALScooterLambdaPolicy-${var.environment}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -69,7 +78,10 @@ resource "aws_iam_policy" "lambda_policy" {
           "dynamodb:Query",
           "dynamodb:Scan"
         ]
-        Resource = aws_dynamodb_table.dalscooter_users.arn
+        Resource = [
+          aws_dynamodb_table.dalscooter_users.arn,
+          var.bookings_table_arn
+        ]
       },
       {
         Effect = "Allow"
@@ -102,7 +114,7 @@ locals {
 
 resource "aws_lambda_function" "validate_signup" {
   filename         = "../../../../cognito/lambda_zip/ValidateSignUpLambda.py.zip"
-  function_name    = "ValidateSignUpLambda"
+  function_name    = "ValidateSignUpLambda-${var.environment}"
   role             = aws_iam_role.lambda_role.arn
   handler          = "ValidateSignUpLambda.lambda_handler"
   runtime          = "python3.9"
@@ -112,7 +124,7 @@ resource "aws_lambda_function" "validate_signup" {
 
 resource "aws_lambda_function" "post_confirmation" {
   filename         = "../../../../cognito/lambda_zip/PostConfirmationLambda.py.zip"
-  function_name    = "PostConfirmationLambda"
+  function_name    = "PostConfirmationLambda-${var.environment}"
   role             = aws_iam_role.lambda_role.arn
   handler          = "PostConfirmationLambda.lambda_handler"
   runtime          = "python3.9"
@@ -127,7 +139,7 @@ resource "aws_lambda_function" "post_confirmation" {
 
 resource "aws_lambda_function" "define_auth_challenge" {
   filename         = "../../../../cognito/lambda_zip/DefineAuthChallengeLambda.py.zip"
-  function_name    = "DefineAuthChallengeLambda"
+  function_name    = "DefineAuthChallengeLambda-${var.environment}"
   role             = aws_iam_role.lambda_role.arn
   handler          = "DefineAuthChallengeLambda.lambda_handler"
   runtime          = "python3.9"
@@ -137,7 +149,7 @@ resource "aws_lambda_function" "define_auth_challenge" {
 
 resource "aws_lambda_function" "create_auth_challenge" {
   filename         = "../../../../cognito/lambda_zip/CreateAuthChallengeLambda.py.zip"
-  function_name    = "CreateAuthChallengeLambda"
+  function_name    = "CreateAuthChallengeLambda-${var.environment}"
   role             = aws_iam_role.lambda_role.arn
   handler          = "CreateAuthChallengeLambda.lambda_handler"
   runtime          = "python3.9"
@@ -147,7 +159,7 @@ resource "aws_lambda_function" "create_auth_challenge" {
 
 resource "aws_lambda_function" "verify_auth_challenge" {
   filename         = "../../../../cognito/lambda_zip/VerifyAuthChallengeResponseLambda.py.zip"
-  function_name    = "VerifyAuthChallengeResponseLambda"
+  function_name    = "VerifyAuthChallengeResponseLambda-${var.environment}"
   role             = aws_iam_role.lambda_role.arn
   handler          = "VerifyAuthChallengeResponseLambda.lambda_handler"
   runtime          = "python3.9"
@@ -157,7 +169,7 @@ resource "aws_lambda_function" "verify_auth_challenge" {
 
 resource "aws_lambda_function" "post_authentication" {
   filename         = "../../../../cognito/lambda_zip/PostAuthenticationLambda.py.zip"
-  function_name    = "PostAuthenticationLambda"
+  function_name    = "PostAuthenticationLambda-${var.environment}"
   role             = aws_iam_role.lambda_role.arn
   handler          = "PostAuthenticationLambda.lambda_handler"
   runtime          = "python3.9"
@@ -172,7 +184,7 @@ resource "aws_lambda_function" "post_authentication" {
 
 # Cognito User Pool
 resource "aws_cognito_user_pool" "dalscooter_user_pool" {
-  name                     = var.user_pool_name
+  name                     = "${var.user_pool_name}-${var.environment}"
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
 
@@ -233,15 +245,100 @@ resource "aws_cognito_user_pool" "dalscooter_user_pool" {
 
 # Cognito User Pool Client
 resource "aws_cognito_user_pool_client" "dalscooter_client" {
-  name         = "DALScooterClient"
+  name         = "DALScooterClient-${var.environment}"
   user_pool_id = aws_cognito_user_pool.dalscooter_user_pool.id
 
   explicit_auth_flows = [
     "ALLOW_CUSTOM_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
     "ALLOW_USER_SRP_AUTH",
-    "ALLOW_ADMIN_USER_PASSWORD_AUTH",
+    "ALLOW_ADMIN_USER_PASSWORD_AUTH"
   ]
+}
+
+# Cognito User Groups
+resource "aws_cognito_user_group" "customers_group" {
+  name         = "Customers"
+  user_pool_id = aws_cognito_user_pool.dalscooter_user_pool.id
+  description  = "Group for registered customers"
+  precedence   = 1
+}
+
+resource "aws_cognito_user_group" "franchise_operators_group" {
+  name         = "FranchiseOperators"
+  user_pool_id = aws_cognito_user_pool.dalscooter_user_pool.id
+  description  = "Group for franchise operators"
+  precedence   = 2
+}
+
+# IAM Role for Customers Group
+resource "aws_iam_role" "customers_role" {
+  name = "CustomersRole-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Federated = "cognito-identity.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "customers_policy" {
+  name = "CustomersPolicy-${var.environment}"
+  role = aws_iam_role.customers_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "sns:Publish"
+        ]
+        Resource = [
+          var.bookings_table_arn,
+          aws_sns_topic.dalscooter_notifications.arn
+        ]
+      }
+    ]
+  })
+}
+
+# IAM Role for Franchise Operators Group
+resource "aws_iam_role" "franchise_operators_role" {
+  name = "FranchiseOperatorsRole-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Federated = "cognito-identity.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "franchise_operators_policy" {
+  name = "FranchiseOperatorsPolicy-${var.environment}"
+  role = aws_iam_role.franchise_operators_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "dynamodb:GetItem"
+        Resource = var.bookings_table_arn
+      }
+    ]
+  })
 }
 
 # Lambda Permissions
@@ -291,4 +388,16 @@ resource "aws_lambda_permission" "cognito_permission_post_authentication" {
   function_name = aws_lambda_function.post_authentication.function_name
   principal     = "cognito-idp.amazonaws.com"
   source_arn    = aws_cognito_user_pool.dalscooter_user_pool.arn
+}
+
+resource "aws_cognito_identity_pool" "dalscooter_identity_pool" {
+  identity_pool_name               = "DALScooterIdentityPool-${var.environment}"
+  allow_unauthenticated_identities = false
+
+  cognito_identity_providers {
+    client_id = aws_cognito_user_pool_client.dalscooter_client.id
+    provider_name = aws_cognito_user_pool.dalscooter_user_pool.endpoint
+  }
+
+  tags = local.common_tags
 }

@@ -1,86 +1,190 @@
 import json
+import boto3
+import uuid
+from datetime import datetime
+
+dynamodb = boto3.resource('dynamodb', region_name='ca-central-1')
 
 def lambda_handler(event, context):
-    # Extract intent name and user input from Lex V2 event structure
-    intent_name = event.get('sessionState', {}).get('intent', {}).get('name')
-    user_input = event.get('inputTranscript', '').lower()
+    try:
+        intent_name = event['sessionState']['intent']['name']
+        slots = event['sessionState']['intent']['slots']
+        user_id = event.get('userId', 'unknown')
+        user_type = event.get('userType', 'guest')
 
-    if intent_name == 'RegisterIntent':
-        # Define responses for different types of input
-        greeting_keywords = ["hi", "hello", "hey", "greetings"]
-        responses = {
-            "register": "To register, go to the Sign-Up page, enter your email, password, and personal details, then submit the form.",
-            "sign up": "To sign up, navigate to the Sign-Up page and provide your email, password, and contact information.",
-            "use the app": "To use the app, start by registering on the Sign-Up page, then log in to access booking and other features.",
-            "booking page": "The booking page is accessible from the main menu after logging in. Click 'Book a Bike' to start.",
-            "navigate the site": "Use the main menu to access key sections: Sign-Up for registration, Login for access, or Book a Bike for reservations.",
-            "create an account": "To create an account, go to the Sign-Up page and fill out the registration form with your details.",
-            "book a bike": "To book a bike, log in and select 'Book a Bike' from the main menu to choose your rental options."
+        if intent_name == 'BookingIntent':
+            return handle_booking_intent(slots, user_id, user_type)
+        elif intent_name == 'NavigationIntent':
+            return handle_navigation_intent(slots)
+        elif intent_name == 'SupportIntent':
+            return handle_support_intent(slots)
+        else:
+            return {
+                'sessionState': {
+                    'dialogAction': {'type': 'Close'},
+                    'intent': {'name': intent_name, 'state': 'Fulfilled'}
+                },
+                'messages': [{'contentType': 'PlainText', 'content': 'Sorry, I don\'t understand that request.'}]
+            }
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return {
+            'sessionState': {
+                'dialogAction': {'type': 'Close'},
+                'intent': {'name': intent_name, 'state': 'Failed'}
+            },
+            'messages': [{'contentType': 'PlainText', 'content': f'Error: {str(e)}'}]
         }
 
-        # Handle greeting inputs
-        if any(keyword in user_input for keyword in greeting_keywords):
-            capabilities = [
-                "Register for an account",
-                "Learn how to use the app",
-                "Find the booking page",
-                "Get help navigating the site",
-                "Book a bike"
-            ]
-            response_text = f"Hello! Welcome to Dal Scooter, I can help you with: {', '.join(capabilities)}. How can I assist you today?"
-        
-        # Handle registration-related queries
-        else:
-            response_text = "I'm here to help! Could you clarify your question about navigating the app?"
-            for key, value in responses.items():
-                if key in user_input:
-                    response_text = value
-                    break
+def handle_booking_intent(slots, user_id, user_type):
+    if user_type != 'customer':
+        return {
+            'sessionState': {
+                'dialogAction': {'type': 'Close'},
+                'intent': {'name': 'BookingIntent', 'state': 'Failed'}
+            },
+            'messages': [{
+                'contentType': 'PlainText',
+                'content': 'Only customers can create or retrieve bookings.'
+            }]
+        }
+
+    action = slots.get('BookingAction', {}).get('value', {}).get('interpretedValue')
+
+    if action == 'create':
+        start_time = slots.get('StartTime', {}).get('value', {}).get('interpretedValue')
+        end_time = slots.get('EndTime', {}).get('value', {}).get('interpretedValue')
+        franchise_id = slots.get('FranchiseId', {}).get('value', {}).get('interpretedValue')
+        vehicle_type = slots.get('VehicleType', {}).get('value', {}).get('interpretedValue')
+
+        missing_slots = []
+        if not start_time:
+            missing_slots.append('StartTime')
+        if not end_time:
+            missing_slots.append('EndTime')
+        if not franchise_id:
+            missing_slots.append('FranchiseId')
+        if not vehicle_type:
+            missing_slots.append('VehicleType')
+
+        if missing_slots:
+            return {
+                'sessionState': {
+                    'dialogAction': {
+                        'type': 'ElicitSlot',
+                        'slotToElicit': missing_slots[0]
+                    },
+                    'intent': {
+                        'name': 'BookingIntent',
+                        'slots': slots,
+                        'state': 'InProgress'
+                    }
+                },
+                'messages': [{
+                    'contentType': 'PlainText',
+                    'content': f'Please provide the {missing_slots[0]}.'
+                }]
+            }
+
+        booking_id = str(uuid.uuid4())
+
+        table = dynamodb.Table('bookings-table-dev')
+        table.put_item(Item={
+            'BookingId': booking_id,
+            'UserId': user_id,
+            'StartTime': start_time,
+            'EndTime': end_time,
+            'FranchiseId': franchise_id,
+            'VehicleType': vehicle_type,
+            'Status': 'confirmed',
+            'CreatedAt': datetime.utcnow().isoformat()
+        })
 
         return {
             'sessionState': {
-                'dialogAction': {
-                    'type': 'Close'
-                },
-                'intent': {
-                    'name': 'RegisterIntent',
-                    'state': 'Fulfilled'
-                }
+                'dialogAction': {'type': 'Close'},
+                'intent': {'name': 'BookingIntent', 'state': 'Fulfilled'}
             },
-            'messages': [
-                {
-                    'contentType': 'PlainText',
-                    'content': response_text
-                }
-            ],
-            'responseContentType': 'application/json'
+            'messages': [{
+                'contentType': 'PlainText',
+                'content': (
+                    f'Booking created successfully!\n'
+                    f'Booking ID: {booking_id}\n'
+                    f'Start Time: {start_time}\n'
+                    f'End Time: {end_time}\n'
+                    f'Franchise ID: {franchise_id}\n'
+                    f'Vehicle Type: {vehicle_type}'
+                )
+            }]
         }
-    
-    # Default case for unexpected intents (should not occur with single intent setup)
-    example_questions = [
-        "How do I register?",
-        "How to sign up?",
-        "Where is the booking page?",
-        "How to use the app?",
-        "How do I book a bike?"
-    ]
-    response_text = f"Sorry, I could not process your request. You can try asking: {', '.join(example_questions)}."
-    
+
+    elif action == 'retrieve':
+        booking_id = slots.get('BookingId', {}).get('value', {}).get('interpretedValue')
+        if not booking_id:
+            return {
+                'sessionState': {
+                    'dialogAction': {'type': 'ElicitSlot', 'slotToElicit': 'BookingId'},
+                    'intent': {'name': 'BookingIntent', 'slots': slots, 'state': 'InProgress'}
+                },
+                'messages': [{'contentType': 'PlainText', 'content': 'Please provide the booking ID.'}]
+            }
+
+        table = dynamodb.Table('bookings-table-dev')
+        response = table.get_item(Key={'BookingId': booking_id})
+        booking = response.get('Item')
+        if not booking:
+            return {
+                'sessionState': {
+                    'dialogAction': {'type': 'Close'},
+                    'intent': {'name': 'BookingIntent', 'state': 'Failed'}
+                },
+                'messages': [{'contentType': 'PlainText', 'content': 'Booking not found.'}]
+            }
+
+        # Format booking info for response
+        booking_info = (
+            f"Booking ID: {booking.get('BookingId')}\n"
+            f"User ID: {booking.get('UserId')}\n"
+            f"Start Time: {booking.get('StartTime')}\n"
+            f"End Time: {booking.get('EndTime')}\n"
+            f"Franchise ID: {booking.get('FranchiseId')}\n"
+            f"Vehicle Type: {booking.get('VehicleType')}\n"
+            f"Status: {booking.get('Status')}\n"
+            f"Created At: {booking.get('CreatedAt')}"
+        )
+
+        return {
+            'sessionState': {
+                'dialogAction': {'type': 'Close'},
+                'intent': {'name': 'BookingIntent', 'state': 'Fulfilled'}
+            },
+            'messages': [{'contentType': 'PlainText', 'content': booking_info}]
+        }
+    else:
+        return {
+            'sessionState': {
+                'dialogAction': {'type': 'Close'},
+                'intent': {'name': 'BookingIntent', 'state': 'Failed'}
+            },
+            'messages': [{'contentType': 'PlainText', 'content': 'Invalid booking action.'}]
+        }
+
+def handle_navigation_intent(slots):
+    location = slots.get('Location', {}).get('value', {}).get('interpretedValue', 'unknown')
     return {
         'sessionState': {
-            'dialogAction': {
-                'type': 'Close'
-            },
-            'intent': {
-                'name': intent_name,
-                'state': 'Failed'
-            }
+            'dialogAction': {'type': 'Close'},
+            'intent': {'name': 'NavigationIntent', 'state': 'Fulfilled'}
         },
-        'messages': [
-            {
-                'contentType': 'PlainText',
-                'content': response_text
-            }
-        ],
-        'responseContentType': 'application/json'
+        'messages': [{'contentType': 'PlainText', 'content': f'Navigating to {location}.'}]
+    }
+
+def handle_support_intent(slots):
+    booking_ref = slots.get('BookingReference', {}).get('value', {}).get('interpretedValue', 'unknown')
+    return {
+        'sessionState': {
+            'dialogAction': {'type': 'Close'},
+            'intent': {'name': 'SupportIntent', 'state': 'Fulfilled'}
+        },
+        'messages': [{'contentType': 'PlainText', 'content': f'Support request for booking {booking_ref} received.'}]
     }

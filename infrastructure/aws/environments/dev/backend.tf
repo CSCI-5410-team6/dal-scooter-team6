@@ -18,21 +18,39 @@ terraform {
 provider "aws" {
   region = "ca-central-1"
 }
-module "chat_bot" {
-  source = "../../modules/chat-bot"
-  bot_name = "DalScooterBotDev"
-  lambda_function_name = "General-Fulfillment-dev"
-  lambda_zip_path = "../../../../chatbot/lex-bot/fulfillment/general_fulfillment.py.zip"
-  environment = "dev"
+
+module "dynamodb" {
+  source        = "../../modules/dynamodb"
+  region        = "ca-central-1"
+  project_name  = var.project_name
+  environment   = var.environment
+}
+
+module "sns" {
+  source        = "../../modules/sns-sqs"
+  region        = "ca-central-1"
+  project_name  = var.project_name
+  environment   = var.environment
+}
+module "lex" {
+  source              = "../../modules/chat-bot"
+  region              = "ca-central-1"
+  bot_name            = "DalScooterBot"
+  lambda_function_name = "GeneralFulfillment"
+  lambda_zip_path     = "../../../../chatbot/lex-bot/fulfillment/general_fulfillment.py.zip"
+  project_name        = var.project_name
+  environment         = var.environment
+  sns_topic_arn       = module.sns.sns_topic_arn
+  bookings_table_arn  = module.dynamodb.bookings_table_arn
 }
 module "cognito" {
-  source = "../../modules/cognito"
-  region           = var.aws_region
-  user_pool_name   = "DALScooterUserPoolDev"
-  sns_topic_name   = "DALScooterNotificationsDev"
-
-  project_name = var.project_name    
-  environment  = var.environment     
+  source            = "../../modules/cognito"
+  region            = "ca-central-1"
+  user_pool_name    = "DALScooterUserPool"
+  sns_topic_name    = "DALScooterNotifications"
+  project_name      = var.project_name
+  environment       = var.environment
+  bookings_table_arn = module.dynamodb.bookings_table_arn
 }
 
 variable "environment" {

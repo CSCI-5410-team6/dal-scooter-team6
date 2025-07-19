@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Auth } from 'aws-amplify';
 import '../../config/amplifyConfig';
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuthContext } from "../../contextStore/AuthContext";
 export let tempUser: any = null;
-
+ 
 const AuthStep1Credentials: React.FC = () => {
   const { setCognitoUser } = useAuthContext();
   const [email, setEmail] = useState("");
@@ -14,36 +15,36 @@ const AuthStep1Credentials: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
+ 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-
+ 
     // Validation
     if (!email || !password) {
       setError("Please fill in all fields");
       setLoading(false);
       return;
     }
-
+ 
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       setError("Please enter a valid email address.");
       setLoading(false);
       return;
     }
-
+ 
     try {
       console.log("Attempting to sign in with:", { email });
-
+ 
       // Initiate authentication with Cognito
       const session = await Auth.signIn({
         username: email,
         password: password
       });
-      setCognitoUser(session); 
+      setCognitoUser(session);
       console.log("SignIn response:", session);
-
+ 
       // Handle different challenge states
       switch (session.challengeName) {
         case 'PASSWORD_VERIFIER':
@@ -58,18 +59,18 @@ const AuthStep1Credentials: React.FC = () => {
             },
           });
           break;
-
+ 
         case 'CUSTOM_CHALLENGE':
           // This could be either Q&A or Cipher challenge
           // Check private challenge parameters to determine which one
           tempUser = session;
-
+ 
           if (session.challengeParam?.question) {
             console.log("Q&A challenge detected");
-
+ 
             // 🔐 Store the Session token in localStorage
            
-
+ 
             navigate("/auth-challenge", {
               state: {
                 email,
@@ -89,17 +90,17 @@ const AuthStep1Credentials: React.FC = () => {
             });
           }
           break;
-
+ 
         case 'NEW_PASSWORD_REQUIRED':
           setError("Password reset required. Please reset your password.");
           break;
-
+ 
         case 'MFA_SETUP':
         case 'SMS_MFA':
         case 'SOFTWARE_TOKEN_MFA':
           setError("MFA setup required. Please complete MFA setup.");
           break;
-
+ 
         case null:
         case undefined:
           // No challenge means authentication is complete
@@ -111,12 +112,12 @@ const AuthStep1Credentials: React.FC = () => {
             setError("Login succeeded but session could not be established.");
           }
           break;
-
+ 
         default:
           console.warn("Unhandled challenge:", session.challengeName);
           setError(`Unsupported challenge: ${session.challengeName}`);
       }
-
+ 
     } catch (error: any) {
       console.error("Login error:", error);
       handleAuthError(error);
@@ -124,7 +125,7 @@ const AuthStep1Credentials: React.FC = () => {
       setLoading(false);
     }
   };
-
+ 
   const handleAuthError = (error: any) => {
     if (error.name === "NotAuthorizedException") {
       setError("Invalid email or password.");
@@ -143,113 +144,111 @@ const AuthStep1Credentials: React.FC = () => {
       setError(`Login failed: ${error.message || 'Unknown error occurred'}`);
     }
   };
+ 
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            <span className="text-3xl font-extrabold tracking-tight select-none">
-              <span className="text-blue-600">DAL</span>
-              <span className="text-gray-900">Scooter</span>
-            </span>
-          </h2>
-          <p className="text-gray-600">Step 1: Login Credentials</p>
-        </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-center">
-            {error}
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-lime-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-gray-900" />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
+            <p className="text-gray-400">Step 1: Sign in with your credentials</p>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your email"
-              required
+          {error && (
+            <div className="mb-4 p-3 bg-red-500 bg-opacity-10 border border-red-400 rounded text-red-400 text-center">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Enter your email"
+                  disabled={loading}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-12 pr-12 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Enter your password"
+                  disabled={loading}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors duration-200"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
               disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="w-full bg-lime-500 hover:bg-lime-600 disabled:bg-gray-600 text-gray-900 font-semibold py-3 rounded-xl transition-all duration-200 flex items-center justify-center group"
             >
-              Password
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
-                placeholder="Enter your password"
-                required
-                disabled={loading}
-              />
+              {loading ? (
+                <div className="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  Continue to Step 2
+                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-200" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-8 text-center">
+            <p className="text-gray-400">
+              Don&apos;t have an account?{" "}
               <button
-                type="button"
-                tabIndex={-1}
-                className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-700"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => navigate("/signup")}
+                className="text-lime-500 hover:text-lime-400 font-medium transition-colors duration-200"
                 disabled={loading}
               >
-                {showPassword ? (
-                  <EyeSlashIcon className="w-5 h-5" />
-                ) : (
-                  <EyeIcon className="w-5 h-5" />
-                )}
+                Sign up now
               </button>
-            </div>
+            </p>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full py-2 px-4 rounded-md font-semibold transition-colors ${loading
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-              } text-white`}
-          >
-            {loading ? 'Signing In...' : 'Continue to Step 2'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <span className="text-sm text-gray-600">
-            Don't have an account?
-          </span>
-          <button
-            onClick={() => navigate("/signup")}
-            className="ml-2 text-blue-600 hover:underline text-sm font-medium"
-            disabled={loading}
-          >
-            Sign Up
-          </button>
-        </div>
-
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => navigate("/forgot-password")}
-            className="text-blue-600 hover:underline text-sm font-medium"
-            disabled={loading}
-          >
-            Forgot Password?
-          </button>
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => navigate("/forgot-password")}
+              className="text-sm text-lime-500 hover:text-lime-400 font-medium transition-colors duration-200"
+              disabled={loading}
+            >
+              Forgot Password?
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -257,4 +256,3 @@ const AuthStep1Credentials: React.FC = () => {
 };
 
 export default AuthStep1Credentials;
-
