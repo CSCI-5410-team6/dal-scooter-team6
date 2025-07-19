@@ -88,7 +88,7 @@ def handle_booking_intent(slots, user_id, user_type):
 
         booking_id = str(uuid.uuid4())
 
-        table = dynamodb.Table('Bookings')
+        table = dynamodb.Table('bookings-table-dev')
         table.put_item(Item={
             'BookingId': booking_id,
             'UserId': user_id,
@@ -129,7 +129,7 @@ def handle_booking_intent(slots, user_id, user_type):
                 'messages': [{'contentType': 'PlainText', 'content': 'Please provide the booking ID.'}]
             }
 
-        table = dynamodb.Table('Bookings')
+        table = dynamodb.Table('bookings-table-dev')
         response = table.get_item(Key={'BookingId': booking_id})
         booking = response.get('Item')
         if not booking:

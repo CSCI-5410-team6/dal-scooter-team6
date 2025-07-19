@@ -32,10 +32,9 @@ import { Amplify } from 'aws-amplify';
 Amplify.configure({
   Auth: {
     region: 'ca-central-1',
-    userPoolId: 'ca-central-1_vYz0cgLcg', // From Terraform output
-    userPoolWebClientId: '4hhfikbef19gio982np7offb9a', // From Terraform output
+    userPoolId: 'ca-central-1_VGjY4slJe', // From Terraform output
+    userPoolWebClientId: '4a2tl75pqipph8samsg2j1k5e2', // From Terraform output
     identityPoolId: 'ca-central-1:86fa591a-3bcc-4793-918b-9bc1ebd2d5b7', // From Terraform output
-    //mandatorySignIn: true,
     authenticationFlowType: 'CUSTOM_AUTH'
   }
 });

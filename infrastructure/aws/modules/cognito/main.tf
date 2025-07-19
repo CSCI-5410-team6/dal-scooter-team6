@@ -13,7 +13,7 @@ provider "aws" {
 
 # DynamoDB Table for Users
 resource "aws_dynamodb_table" "dalscooter_users" {
-  name         = "DALScooterUsers-${var.environment}"
+  name         = "DALScooterUsers1"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "userId"
 

@@ -1,25 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Auth, API } from 'aws-amplify';
-import '../../config/amplifyConfig';
-import { useAuthContext } from "../../contextStore/AuthContext";
-
+import { Auth } from 'aws-amplify';
+import '../../config/amplifyConfig'; // Import the config
+import { useAuthContext } from "../../contextStore/AuthContext"; // Import Auth context
+import { Lock, Eye, EyeOff, ArrowRight, Shield, Key } from 'lucide-react';
+ 
 const AuthChallenge: React.FC = () => {
   const { cognitoUser, setCognitoUser } = useAuthContext();
   const [challengeAnswer, setChallengeAnswer] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState("question");
+  const [view, setView] = useState("question"); // 'question' or 'caesar'
   const [challengeSession, setChallengeSession] = useState(null);
+  const [challengeType, setChallengeType] = useState("");
   const [challengeQuestion, setChallengeQuestion] = useState("");
   const [challengeClue, setChallengeClue] = useState("");
   const [challengeShift, setChallengeShift] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
-  const { email, challengeSession: initialSession, challengeParameters } = location.state || {};
-
+  const { email: stateEmail, challengeSession: initialSession, challengeParameters } = location.state || {};
+ 
+  const email = stateEmail || localStorage.getItem("authEmail") || "";
+ 
   useEffect(() => {
+    console.log("Challenge parameters received:", challengeParameters);
     if (challengeParameters) {
       if (challengeParameters.question) {
         setChallengeQuestion(challengeParameters.question);
@@ -34,239 +39,273 @@ const AuthChallenge: React.FC = () => {
       setChallengeSession(initialSession);
     }
   }, [challengeParameters, initialSession]);
-
+ 
   const handleChallengeAnswer = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
     setLoading(true);
-
+ 
     if (!challengeAnswer) {
       setError('Please provide an answer.');
       setLoading(false);
       return;
     }
-
+ 
     try {
+      console.log('challenge session', challengeSession || cognitoUser);
+      console.log('challenge answer', challengeAnswer);
+     
       const sessionToUse = challengeSession || cognitoUser;
       const response = await Auth.sendCustomChallengeAnswer(sessionToUse, challengeAnswer.trim());
-      
+      console.log('Challenge response:', response);
+ 
       if (response.challengeName === 'CUSTOM_CHALLENGE') {
         setChallengeSession(response);
-        setCognitoUser(response);
-        if (response.challengeParam?.question) {
-          setChallengeQuestion(response.challengeParam.question);
+        setCognitoUser(response); // Update context
+        setChallengeType(response.challengeParam.challengeMetadata);
+        console.log('Response ::::::::', response);
+ 
+        if (response.challengeParam.challengeMetadata === 'QUESTION_CHALLENGE') {
+          setChallengeQuestion(response.challengeParam.publicChallengeParameters.question);
           setView('question');
-        } else if (response.challengeParam?.cipherChallenge) {
-          setChallengeClue(response.challengeParam.cipherChallenge);
-          setChallengeShift(response.challengeParam.cipherShift);
+        } else {
+          console.log('challengeParam ::::::::', response.challengeParam);
+          setChallengeClue(response.challengeParam.clue);
+          setChallengeShift(response.challengeParam.shift);
           setView('caesar');
         }
         setChallengeAnswer('');
       } else {
-        await API.post('snsApi', '/publish', {
-          body: {
-            TopicArn: process.env.REACT_APP_SNS_SIGNIN_TOPIC_ARN,
-            Message: JSON.stringify({
-              email,
-              event: 'SIGN_IN',
-              timestamp: new Date().toISOString()
-            })
-          }
-        });
         setSuccess('Login successful!');
+        console.log("🎉 Authentication successful!");
         setTimeout(() => navigate("/dashboard"), 1500);
       }
     } catch (err: any) {
+      console.error('Challenge error:', err);
       setError('Challenge response failed. Please try again.');
       setChallengeAnswer('');
     } finally {
       setLoading(false);
     }
   };
-
+ 
   const handleBack = () => navigate("/login");
-
+ 
   const renderQuestionView = () => (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            <span className="text-3xl font-extrabold tracking-tight select-none">
-              <span className="text-blue-600">DAL</span>
-              <span className="text-gray-900">Scooter</span>
-            </span>
-          </h2>
-          <p className="text-gray-600">Step 2: Security Question</p>
-        </div>
-        {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-center">
-            {success}
-          </div>
-        )}
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-center">
-            {error}
-          </div>
-        )}
-        <form onSubmit={handleChallengeAnswer} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Security Question
-            </label>
-            <div className="p-3 bg-gray-50 rounded-md text-gray-900 border">
-              {challengeQuestion || "Loading question..."}
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-lime-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Shield className="w-8 h-8 text-gray-900" />
             </div>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              <span className="text-lime-500">DAL</span>
+              <span className="text-white">Scooter</span>
+            </h1>
+            <p className="text-gray-400">Step 2: Security Question</p>
           </div>
-          <div>
-            <label htmlFor="challengeAnswer" className="block text-sm font-medium text-gray-700 mb-1">
-              Your Answer
-            </label>
-            <input
-              type="text"
-              id="challengeAnswer"
-              value={challengeAnswer}
-              onChange={(e) => setChallengeAnswer(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your answer"
-              required
-              disabled={loading}
-              autoFocus
-            />
+
+          {success && (
+            <div className="mb-4 p-3 bg-green-900/50 border border-green-500 rounded-xl text-green-400 text-center">
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-xl text-red-400 text-center">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleChallengeAnswer} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Security Question
+              </label>
+              <div className="p-4 bg-gray-700 border border-gray-600 rounded-xl text-white">
+                {challengeQuestion || "Loading question..."}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="challengeAnswer" className="block text-sm font-medium text-gray-300 mb-2">
+                Your Answer
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  id="challengeAnswer"
+                  value={challengeAnswer}
+                  onChange={(e) => setChallengeAnswer(e.target.value.toLowerCase())}
+                  className="w-full pl-12 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Enter your answer"
+                  required
+                  disabled={loading}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={handleBack}
+                disabled={loading}
+                className="flex-1 py-3 px-4 rounded-xl font-semibold transition-all duration-200 bg-gray-700 text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:bg-gray-600 disabled:text-gray-500 disabled:cursor-not-allowed"
+              >
+                Back to Login
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !challengeAnswer}
+                className="flex-1 bg-lime-500 hover:bg-lime-600 disabled:bg-gray-600 text-gray-900 font-semibold py-3 rounded-xl transition-all duration-200 flex items-center justify-center group"
+              >
+                {loading ? (
+                  <div className="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    Continue
+                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-200" />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-xs text-gray-400">
+              Having trouble? Please contact support for assistance.
+            </p>
           </div>
-          <div className="flex space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={handleBack}
-              disabled={loading}
-              className={`flex-1 py-2 px-4 rounded-md font-semibold transition-colors ${loading
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-gray-300 text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'
-                }`}
-            >
-              Back to Login
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !challengeAnswer}
-              className={`flex-1 py-2 px-4 rounded-md font-semibold transition-colors ${loading || !challengeAnswer
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-                } text-white`}
-            >
-              {loading ? 'Verifying...' : 'Continue'}
-            </button>
-          </div>
-        </form>
-        <div className="mt-6 text-center">
-          <p className="text-xs text-gray-500">
-            Having trouble? Please contact support for assistance.
-          </p>
         </div>
       </div>
     </div>
   );
-
+ 
   const renderCaesarView = () => (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            <span className="text-3xl font-extrabold tracking-tight select-none">
-              <span className="text-blue-600">DAL</span>
-              <span className="text-gray-900">Scooter</span>
-            </span>
-          </h2>
-          <p className="text-gray-600">Step 3: Caesar Cipher Challenge</p>
-        </div>
-        {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-center">
-            {success}
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-lime-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Key className="w-8 h-8 text-gray-900" />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              <span className="text-lime-500">DAL</span>
+              <span className="text-white">Scooter</span>
+            </h1>
+            <p className="text-gray-400">Step 3: Caesar Cipher Challenge</p>
           </div>
-        )}
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-center">
-            {error}
+
+          <div className="text-center mb-6">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Final Authentication Step
+            </h3>
+            <p className="text-sm text-gray-400">
+              Complete the final authentication step
+            </p>
           </div>
-        )}
-        <form onSubmit={handleChallengeAnswer} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Caesar Cipher Puzzle
-            </label>
-            <div className="p-4 bg-gray-50 rounded-md border text-center">
-              <p className="text-xl font-mono text-gray-900 mb-2">
-                {challengeClue || "LOADING..."}
+
+          {success && (
+            <div className="mb-4 p-3 bg-green-900/50 border border-green-500 rounded-xl text-green-400 text-center">
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-xl text-red-400 text-center">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleChallengeAnswer} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Caesar Cipher Puzzle
+              </label>
+              <div className="p-4 bg-gray-700 border border-gray-600 rounded-xl text-center">
+                <p className="text-xl font-mono text-white mb-2">
+                  {challengeClue || "LOADING..."}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Encrypted message - decode to continue
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-lime-900/20 border border-lime-500/30 rounded-xl">
+              <h3 className="text-sm font-medium text-lime-400 mb-2 flex items-center">
+                <Lock className="w-4 h-4 mr-1" />
+                How to solve:
+              </h3>
+              <p className="text-sm text-lime-300">
+                Shift each letter -{challengeShift || "?"} positions backward in the alphabet.
               </p>
-              <p className="text-xs text-gray-500">
-                Encrypted message - decode to continue
+              <p className="text-xs text-lime-400 mt-1">
+                Example: If shift is 3, then D→A, E→B, F→C, etc.
               </p>
             </div>
-          </div>
-          <div className="p-4 bg-blue-50 rounded-md border border-blue-200">
-            <h3 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              How to solve:
-            </h3>
-            <p className="text-sm text-blue-800">
-              Shift each letter -{challengeShift || "?"} positions backward in the alphabet.
+
+            <div>
+              <label htmlFor="challengeAnswer" className="block text-sm font-medium text-gray-300 mb-2">
+                Your Answer
+              </label>
+              <div className="relative">
+                <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  id="challengeAnswer"
+                  value={challengeAnswer}
+                  onChange={(e) => setChallengeAnswer(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Enter the decoded message"
+                  required
+                  disabled={loading}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={handleBack}
+                disabled={loading}
+                className="flex-1 py-3 px-4 rounded-xl font-semibold transition-all duration-200 bg-gray-700 text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:bg-gray-600 disabled:text-gray-500 disabled:cursor-not-allowed"
+              >
+                Back to Login
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !challengeAnswer.trim()}
+                className="flex-1 bg-lime-500 hover:bg-lime-600 disabled:bg-gray-600 text-gray-900 font-semibold py-3 rounded-xl transition-all duration-200 flex items-center justify-center group"
+              >
+                {loading ? (
+                  <div className="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    Complete Login
+                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-200" />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-xs text-gray-400">
+              Having trouble? Please contact support for assistance.
             </p>
-            <p className="text-xs text-blue-600 mt-1">
-              Example: If shift is 3, then D→A, E→B, F→C, etc.
-            </p>
           </div>
-          <div>
-            <label htmlFor="challengeAnswer" className="block text-sm font-medium text-gray-700 mb-1">
-              Your Answer
-            </label>
-            <input
-              type="text"
-              id="challengeAnswer"
-              value={challengeAnswer}
-              onChange={(e) => setChallengeAnswer(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter the decoded message"
-              required
-              disabled={loading}
-              autoFocus
-            />
-          </div>
-          <div className="flex space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={handleBack}
-              disabled={loading}
-              className={`flex-1 py-2 px-4 rounded-md font-semibold transition-colors ${loading
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-gray-300 text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'
-                }`}
-            >
-              Back to Login
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !challengeAnswer.trim()}
-              className={`flex-1 py-2 px-4 rounded-md font-semibold transition-colors ${loading || !challengeAnswer.trim()
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2'
-                } text-white`}
-            >
-              {loading ? 'Verifying...' : 'Complete Login'}
-            </button>
-          </div>
-        </form>
-        <div className="mt-6 text-center">
-          <p className="text-xs text-gray-500">
-            Having trouble? Please contact support for assistance.
-          </p>
         </div>
       </div>
     </div>
   );
-
+ 
   return view === 'question' ? renderQuestionView() : renderCaesarView();
 };
-
+ 
 export default AuthChallenge;
