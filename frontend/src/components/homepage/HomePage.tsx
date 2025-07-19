@@ -300,7 +300,7 @@ function HomePage() {
               </div>
             </div>
             <div className="hidden md:flex items-center space-x-4">
-              <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+              <button onClick={()=>{ navigate('/signup');}} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
                 Book Now
               </button>
             </div>
@@ -359,7 +359,7 @@ function HomePage() {
               >
                 Contact
               </button>
-              <button className="w-full text-left bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg font-medium mt-4">
+              <button onClick={()=>{ navigate('/signup');}} className="w-full text-left bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg font-medium mt-4">
                 Book Now
               </button>
             </div>
