@@ -14,7 +14,7 @@ variable "project_name" {
   type        = string
 }
 
-variable "lambda_function_name" {
-  description = "Name of the Lambda function to integrate with API Gateway"
+variable "cognito_user_pool_arn" {
+  description = "ARN of the Cognito User Pool"
   type        = string
 }

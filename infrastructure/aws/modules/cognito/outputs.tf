@@ -11,6 +11,7 @@ output "sns_topic_arn" {
 }
 
 output "user_pool_arn" {
+  description = "ARN of the Cognito User Pool"
   value = aws_cognito_user_pool.dalscooter_user_pool.arn
 }
 

@@ -1,3 +1,4 @@
+# Provider 
 terraform {
   required_providers {
     aws = {
@@ -10,10 +11,13 @@ provider "aws" {
   region = var.region
 }
 
+# Data Sources
+data "aws_caller_identity" "current" {}
 data "aws_dynamodb_table" "bikes_table" {
   name = "bikes-table-${var.environment}"
 }
 
+# S3 
 resource "aws_s3_bucket" "bike_images" {
   bucket = "dalscooter-bike-images-${var.environment}"
   tags   = local.common_tags
@@ -44,6 +48,8 @@ resource "aws_s3_bucket_policy" "bike_images_policy" {
     ]
   })
 }
+
+# IAM Roles and Policies
 resource "aws_iam_role" "lambda_execution_role" {
   name = "DALScooterLambdaInvocationRole-${var.environment}"
 
@@ -80,7 +86,9 @@ resource "aws_iam_policy" "lambda_policy" {
           "dynamodb:PutItem",
           "dynamodb:GetItem",
           "dynamodb:Query",
-          "dynamodb:Scan"
+          "dynamodb:Scan", 
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem"
         ]
         Resource = [
           data.aws_dynamodb_table.bikes_table.arn,
@@ -111,6 +119,7 @@ locals {
   }
 }
 
+#Lambda Functions
 resource "aws_lambda_function" "create-bike" {
   filename      = "../../../../backend/lambda_functions/create_bike.py.zip"
   function_name = "create-bike-${var.environment}"
@@ -126,29 +135,101 @@ resource "aws_lambda_function" "create-bike" {
   }
   tags = local.common_tags
 }
+
+resource "aws_lambda_function" "update-bike" {
+  filename      = "../../../../backend/lambda_functions/update_bike.py.zip"
+  function_name = "update-bike-${var.environment}"
+  role          = aws_iam_role.lambda_execution_role.arn
+  handler       = "update_bike.lambda_handler"
+  runtime       = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/update_bike.py.zip")
+  environment {
+    variables = {
+      BIKES_TABLE = "bikes-table-${var.environment}"
+      BIKE_IMAGES_BUCKET = aws_s3_bucket.bike_images.bucket
+    }
+  }
+  tags = local.common_tags
+}
+
+resource "aws_lambda_function" "get-bike" {
+  filename         = "../../../../backend/lambda_functions/get_bike.py.zip"
+  function_name    = "get-bike-${var.environment}"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "get_bike.lambda_handler"
+  runtime          = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_bike.py.zip")
+  environment {
+    variables = {
+      BIKES_TABLE = "bikes-table-${var.environment}"
+    }
+  }
+  tags = local.common_tags
+}
+
+resource "aws_lambda_function" "get-all-bikes" {
+  filename         = "../../../../backend/lambda_functions/get_all_bikes.py.zip"
+  function_name    = "get-all-bikes-${var.environment}"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "get_all_bikes.lambda_handler"
+  runtime          = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_all_bikes.py.zip")
+  environment {
+    variables = {
+      BIKES_TABLE = "bikes-table-${var.environment}"
+    }
+  }
+  tags = local.common_tags
+}
+resource "aws_lambda_function" "delete-bike" {
+  filename         = "../../../../backend/lambda_functions/delete_bike.py.zip"
+  function_name    = "delete-bike-${var.environment}"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "delete_bike.lambda_handler"
+  runtime          = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/delete_bike.py.zip")
+  environment {
+    variables = {
+      BIKES_TABLE = "bikes-table-${var.environment}"
+    }
+  }
+  tags = local.common_tags
+}
+
+# --- API Gateway ---
 resource "aws_api_gateway_rest_api" "this" {
   name        = "dal-scooter-team-6-api-${var.environment}"
   description = "API Gateway for dal-scooter-team-6 in ${var.environment} environment"
-  tags = {
-    Project     = var.project_name
-    Environment = var.environment
-  }
+  tags = local.common_tags
 }
 
-resource "aws_api_gateway_resource" "create_bike" {
+# ===========================
+# /bikes (POST) Endpoint
+# ===========================
+resource "aws_api_gateway_resource" "bikes" {
   rest_api_id = aws_api_gateway_rest_api.this.id
   parent_id   = aws_api_gateway_rest_api.this.root_resource_id
-  path_part   = "create-bike"
+  path_part   = "bikes"
 }
 
-resource "aws_api_gateway_method" "create_bike_post" {
+resource "aws_api_gateway_method" "bikes_post" {
   rest_api_id   = aws_api_gateway_rest_api.this.id
-  resource_id   = aws_api_gateway_resource.create_bike.id
+  resource_id   = aws_api_gateway_resource.bikes.id
   http_method   = "POST"
-  authorization = "NONE"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
 }
 
-resource "aws_lambda_permission" "apigw" {
+resource "aws_api_gateway_integration" "bikes_post" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.bikes.id
+  http_method = aws_api_gateway_method.bikes_post.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:create-bike-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "bikes_post" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.create-bike.function_name
@@ -156,28 +237,20 @@ resource "aws_lambda_permission" "apigw" {
   source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/*"
 }
 
-resource "aws_api_gateway_integration" "create_bike_post" {
-  rest_api_id = aws_api_gateway_rest_api.this.id
-  resource_id = aws_api_gateway_resource.create_bike.id
-  http_method = aws_api_gateway_method.create_bike_post.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:create-bike-${var.environment}/invocations"
-}
-
+# CORS for /bikes
 # OPTIONS method for CORS preflight
-resource "aws_api_gateway_method" "create_bike_options" {
+resource "aws_api_gateway_method" "bikes_options" {
   rest_api_id   = aws_api_gateway_rest_api.this.id
-  resource_id   = aws_api_gateway_resource.create_bike.id
+  resource_id   = aws_api_gateway_resource.bikes.id
   http_method   = "OPTIONS"
   authorization = "NONE"
 }
 
 # OPTIONS integration (MOCK)
-resource "aws_api_gateway_integration" "create_bike_options" {
+resource "aws_api_gateway_integration" "bikes_options" {
   rest_api_id = aws_api_gateway_rest_api.this.id
-  resource_id = aws_api_gateway_resource.create_bike.id
-  http_method = aws_api_gateway_method.create_bike_options.http_method
+  resource_id = aws_api_gateway_resource.bikes.id
+  http_method = aws_api_gateway_method.bikes_options.http_method
   type        = "MOCK"
 
   request_templates = {
@@ -186,10 +259,10 @@ resource "aws_api_gateway_integration" "create_bike_options" {
 }
 
 # Method response for POST
-resource "aws_api_gateway_method_response" "create_bike_options_200" {
+resource "aws_api_gateway_method_response" "bikes_options_200" {
   rest_api_id = aws_api_gateway_rest_api.this.id
-  resource_id = aws_api_gateway_resource.create_bike.id
-  http_method = aws_api_gateway_method.create_bike_options.http_method
+  resource_id = aws_api_gateway_resource.bikes.id
+  http_method = aws_api_gateway_method.bikes_options.http_method
   status_code = "200"
 
   response_parameters = {
@@ -200,27 +273,212 @@ resource "aws_api_gateway_method_response" "create_bike_options_200" {
 }
 
 # Integration response for OPTIONS
-resource "aws_api_gateway_integration_response" "create_bike_options_200" {
+resource "aws_api_gateway_integration_response" "bikes_options_200" {
   rest_api_id = aws_api_gateway_rest_api.this.id
-  resource_id = aws_api_gateway_resource.create_bike.id
-  http_method = aws_api_gateway_method.create_bike_options.http_method
+  resource_id = aws_api_gateway_resource.bikes.id
+  http_method = aws_api_gateway_method.bikes_options.http_method
   status_code = "200"
-
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
   }
-  depends_on = [aws_api_gateway_integration.create_bike_options]
+  depends_on = [aws_api_gateway_integration.bikes_options]
 }
 
-data "aws_caller_identity" "current" {}
+# ===========================
+# /bikes/{bikeId} (PUT) Endpoint
+# ===========================
 
+resource "aws_api_gateway_resource" "bike_id" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  parent_id   = aws_api_gateway_resource.bikes.id
+  path_part   = "{bikeId}"
+}
+
+resource "aws_api_gateway_method" "bike_id_put" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.bike_id.id
+  http_method   = "PUT"
+  request_parameters = {
+    "method.request.path.bikeId" = true
+  }
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+# Lambda integration for PUT
+resource "aws_api_gateway_integration" "bike_id_put" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.bike_id.id
+  http_method             = aws_api_gateway_method.bike_id_put.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:update-bike-${var.environment}/invocations"
+}
+
+# Lambda permission for API Gateway to invoke
+resource "aws_lambda_permission" "bike_id_put" {
+  statement_id  = "AllowAPIGatewayInvokeUpdateBike"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.update-bike.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/PUT/bikes/*"
+}
+
+# CORS OPTIONS for /bikes/{bikeId}
+resource "aws_api_gateway_method" "update_bike_options" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.bike_id.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "update_bike_options" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.bike_id.id
+  http_method = aws_api_gateway_method.update_bike_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "update_bike_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.bike_id.id
+  http_method = aws_api_gateway_method.update_bike_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "update_bike_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.bike_id.id
+  http_method = aws_api_gateway_method.update_bike_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'PUT,OPTIONS'"
+  }
+  depends_on = [aws_api_gateway_integration.update_bike_options]
+}
+# ===========================
+# /bikes/{bikeId} (GET) Endpoint
+# ===========================
+
+# GET method for /bikes/{bikeId}
+resource "aws_api_gateway_method" "bike_id_get" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.bike_id.id
+  http_method   = "GET"
+  authorization = "NONE" # Or "COGNITO_USER_POOLS" if you want to protect it
+  request_parameters = {
+    "method.request.path.bikeId" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "bike_id_get" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.bike_id.id
+  http_method             = aws_api_gateway_method.bike_id_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:get-bike-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "bike_id_get" {
+  statement_id  = "AllowAPIGatewayInvokeGetBike"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get-bike.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/GET/bikes/*"
+}
+# ===========================
+# /bikes/{bikeId} (DELETE) Endpoint
+# ===========================
+resource "aws_api_gateway_method" "bike_id_delete" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.bike_id.id
+  http_method   = "DELETE"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+  request_parameters = {
+    "method.request.path.bikeId" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "bike_id_delete" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.bike_id.id
+  http_method             = aws_api_gateway_method.bike_id_delete.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:delete-bike-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "bike_id_delete" {
+  statement_id  = "AllowAPIGatewayInvokeDeleteBike"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.delete-bike.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/DELETE/bikes/*"
+}
+
+# ===========================
+# /bikes (GET all bikes) Endpoint
+# ===========================
+# GET method for /bikes
+resource "aws_api_gateway_method" "bikes_get" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.bikes.id
+  http_method   = "GET"
+  authorization = "NONE" # Or "COGNITO_USER_POOLS" if you want to protect it
+}
+
+resource "aws_api_gateway_integration" "bikes_get" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.bikes.id
+  http_method             = aws_api_gateway_method.bikes_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:get-all-bikes-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "bikes_get" {
+  statement_id  = "AllowAPIGatewayInvokeGetAllBikes"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get-all-bikes.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/GET/bikes"
+}
+
+resource "aws_api_gateway_authorizer" "cognito" {
+  name                   = "CognitoAuthorizer"
+  rest_api_id            = aws_api_gateway_rest_api.this.id
+  type                   = "COGNITO_USER_POOLS"
+  provider_arns          = [var.cognito_user_pool_arn] // Reference your Cognito user pool
+  identity_source        = "method.request.header.Authorization"
+}
+
+# --- Deployment ---
 resource "aws_api_gateway_deployment" "this" {
   depends_on = [
-    aws_api_gateway_integration.create_bike_post,
-    aws_api_gateway_integration.create_bike_options,
-    aws_api_gateway_integration_response.create_bike_options_200
+    aws_api_gateway_integration.bikes_post,
+    aws_api_gateway_integration.bikes_get,
+    aws_api_gateway_integration.bikes_options,
+    aws_api_gateway_integration_response.bikes_options_200,
+    
+    aws_api_gateway_integration.bike_id_put,
+    aws_api_gateway_integration.bike_id_get,
+    aws_api_gateway_integration.bike_id_delete,
+    aws_api_gateway_integration.update_bike_options,
+    aws_api_gateway_integration_response.update_bike_options_200,
   ]
   rest_api_id = aws_api_gateway_rest_api.this.id
   stage_name  = var.environment

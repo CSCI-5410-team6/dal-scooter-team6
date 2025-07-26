@@ -35,10 +35,15 @@ def lambda_handler(event, context):
             return response(400, f"Invalid bike type '{bike_type}'.")
  
         # Get franchiseId from Cognito claims
-        # claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-        # franchise_id = claims.get("sub")
-        # if not franchise_id:
-        #     return response(403, "Unauthorized: Franchise identity missing.")
+        claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
+
+        user_type = claims.get("custom:userType")
+        if user_type != "admin":
+            return response(403, "Unauthorized: Only admin can add a bike.")
+
+        franchise_id = claims.get("cognito:username")
+        if not franchise_id:
+            return response(403, "Unauthorized: Franchise identity missing.")
  
         # Check if bike already exists
         existing = table.get_item(Key={"bikeId": bike_id})
@@ -66,7 +71,7 @@ def lambda_handler(event, context):
             "hourlyRate": hourly_rate,
             "discountCode": discount_code,
             "imageUrl": image_url,
-            "franchiseId": "9c7dd528-a071-7093-4030-b044d0d1f16d",
+            "franchiseId": franchise_id,
             "createdAt": datetime.utcnow().isoformat()
         }
  
