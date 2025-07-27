@@ -1,53 +1,142 @@
-import React, { useState } from 'react';
-import { Menu, X, MapPin, Phone, Mail, ChevronRight, Star, Calendar, Clock, Users } from 'lucide-react';
-import Chatbot from '../chatbot/ChatBot';
-import About from './About';
-import Service from './Service';
-import FAQ from './FAQ';
-import Contact from './Contact';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import {
+  Menu,
+  X,
+  MapPin,
+  Phone,
+  Mail,
+  ChevronRight,
+  Star,
+  Calendar,
+  Clock,
+  Users,
+} from "lucide-react";
+import Chatbot from "../chatbot/ChatBot";
+import About from "./About";
+import Service from "./Service";
+import FAQ from "./FAQ";
+import Contact from "./Contact";
+import { useNavigate } from "react-router-dom";
+import { useAuthContext } from "../../contextStore/AuthContext";
+import { Auth } from "aws-amplify";
 
 function HomePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState('home');
-    const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState("home");
+  const navigate = useNavigate();
+  const { cognitoUser, setCognitoUser } = useAuthContext();
+
+  // Helper for base64url decoding
+  function base64UrlDecode(str: string) {
+    str = str.replace(/-/g, "+").replace(/_/g, "/");
+    while (str.length % 4) {
+      str += "=";
+    }
+    return atob(str);
+  }
+
+  // Helper to extract name from idToken in localStorage, and debug info
+  function getUserNameAndDebug() {
+    let debug: {
+      idTokenKey: string | undefined;
+      rawToken?: string | null;
+      splitParts?: string[];
+      payload: any;
+      name: string | null;
+      error?: string;
+    } = { idTokenKey: undefined, payload: null, name: null };
+    try {
+      const idTokenKey = Object.keys(localStorage).find((key) =>
+        key.includes(".idToken")
+      );
+      debug.idTokenKey = idTokenKey;
+      if (idTokenKey) {
+        const idToken = localStorage.getItem(idTokenKey);
+        debug.rawToken = idToken;
+        if (idToken) {
+          const parts = idToken.split(".");
+          debug.splitParts = parts;
+          if (parts.length === 3) {
+            try {
+              const payload = JSON.parse(base64UrlDecode(parts[1]));
+              debug.payload = payload;
+              debug.name = payload.name || null;
+            } catch (err: any) {
+              debug.error =
+                "base64UrlDecode/JSON.parse error: " +
+                (err?.message || String(err));
+            }
+          } else {
+            debug.error = "Token does not have 3 parts";
+          }
+        } else {
+          debug.error = "idToken not found in localStorage";
+        }
+      } else {
+        debug.error = "idTokenKey not found";
+      }
+    } catch (err: any) {
+      debug.error = "Outer error: " + (err?.message || String(err));
+    }
+    return debug;
+  }
+  const debugInfo = getUserNameAndDebug();
+  const userName = debugInfo.name;
+
+  // Log out handler
+  const handleLogout = async () => {
+    try {
+      await Auth.signOut(); // If using aws-amplify Auth
+    } catch (e) {}
+    // Remove all Cognito tokens from localStorage
+    Object.keys(localStorage).forEach((key) => {
+      if (key.includes("CognitoIdentityServiceProvider")) {
+        localStorage.removeItem(key);
+      }
+    });
+    setCognitoUser(null);
+    navigate("/");
+  };
 
   const featuredBikes = [
     {
       id: 1,
-      name: 'Urban Explorer 2024',
-      image: 'https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400',
+      name: "Urban Explorer 2024",
+      image:
+        "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
       rating: 4.8,
-      price: '$15/hour',
-      features: ['40km Range', 'Smart Lock', 'GPS Tracking']
+      price: "$15/hour",
+      features: ["40km Range", "Smart Lock", "GPS Tracking"],
     },
     {
       id: 2,
-      name: 'Mountain Beast Pro',
-      image: 'https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400',
+      name: "Mountain Beast Pro",
+      image:
+        "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
       rating: 4.9,
-      price: '$20/hour',
-      features: ['60km Range', 'All-Terrain', 'Quick Charge']
+      price: "$20/hour",
+      features: ["60km Range", "All-Terrain", "Quick Charge"],
     },
     {
       id: 3,
-      name: 'City Cruiser Deluxe',
-      image: 'https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400',
+      name: "City Cruiser Deluxe",
+      image:
+        "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
       rating: 4.7,
-      price: '$12/hour',
-      features: ['35km Range', 'Comfort Seat', 'LED Lights']
-    }
+      price: "$12/hour",
+      features: ["35km Range", "Comfort Seat", "LED Lights"],
+    },
   ];
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'about':
+      case "about":
         return <About />;
-      case 'service':
+      case "service":
         return <Service />;
-      case 'faq':
+      case "faq":
         return <FAQ />;
-      case 'contact':
+      case "contact":
         return <Contact />;
       default:
         return renderHomePage();
@@ -67,12 +156,13 @@ function HomePage() {
                   <span className="block text-green-400">Overview</span>
                 </h1>
                 <p className="text-lg text-gray-300 max-w-lg leading-relaxed">
-                  Experience the future of urban mobility with our premium e-bike fleet. 
-                  Eco-friendly, efficient, and designed for the modern commuter. 
-                  Book your ride today and transform your daily journey.
+                  Experience the future of urban mobility with our premium
+                  e-bike fleet. Eco-friendly, efficient, and designed for the
+                  modern commuter. Book your ride today and transform your daily
+                  journey.
                 </p>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row gap-4">
                 <button className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 flex items-center justify-center group">
                   GET BIKE
@@ -118,15 +208,21 @@ function HomePage() {
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-800/50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Featured E-Bikes</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Featured E-Bikes
+            </h2>
             <p className="text-gray-300 text-lg max-w-2xl mx-auto">
-              Choose from our premium selection of electric bikes, each designed for different adventures and lifestyles.
+              Choose from our premium selection of electric bikes, each designed
+              for different adventures and lifestyles.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {featuredBikes.map((bike) => (
-              <div key={bike.id} className="bg-gray-800 rounded-xl overflow-hidden hover:bg-gray-750 transition-all duration-300 transform hover:scale-105 border border-gray-700">
+              <div
+                key={bike.id}
+                className="bg-gray-800 rounded-xl overflow-hidden hover:bg-gray-750 transition-all duration-300 transform hover:scale-105 border border-gray-700"
+              >
                 <div className="relative">
                   <img
                     src={bike.image}
@@ -142,7 +238,9 @@ function HomePage() {
                     <h3 className="text-xl font-semibold">{bike.name}</h3>
                     <div className="flex items-center space-x-1">
                       <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                      <span className="text-sm text-gray-300">{bike.rating}</span>
+                      <span className="text-sm text-gray-300">
+                        {bike.rating}
+                      </span>
                     </div>
                   </div>
                   <div className="space-y-2 mb-4">
@@ -153,7 +251,12 @@ function HomePage() {
                       </div>
                     ))}
                   </div>
-                  <button onClick={()=>{ navigate('/signup');}} className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors">
+                  <button
+                    onClick={() => {
+                      navigate("/signup");
+                    }}
+                    className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors"
+                  >
                     Book Now
                   </button>
                 </div>
@@ -176,7 +279,9 @@ function HomePage() {
               <div className="text-gray-300">Happy Riders</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold text-green-400 mb-2">99.9%</div>
+              <div className="text-4xl font-bold text-green-400 mb-2">
+                99.9%
+              </div>
               <div className="text-gray-300">Uptime</div>
             </div>
             <div className="text-center">
@@ -194,7 +299,8 @@ function HomePage() {
             <div className="space-y-4">
               <div className="text-2xl font-bold text-green-400">E-Ride</div>
               <p className="text-gray-300">
-                Revolutionizing urban transportation with premium electric bikes.
+                Revolutionizing urban transportation with premium electric
+                bikes.
               </p>
               <div className="flex space-x-4">
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
@@ -252,46 +358,58 @@ function HomePage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <span className="text-2xl font-bold text-green-400">E-Ride</span>
+                <span className="text-2xl font-bold text-green-400">
+                  E-Ride
+                </span>
               </div>
               <div className="hidden md:block">
                 <div className="ml-10 flex items-baseline space-x-8">
-                  <button 
-                    onClick={() => setCurrentPage('home')}
+                  <button
+                    onClick={() => setCurrentPage("home")}
                     className={`px-3 py-2 text-sm font-medium transition-colors ${
-                      currentPage === 'home' ? 'text-white' : 'text-gray-300 hover:text-green-400'
+                      currentPage === "home"
+                        ? "text-white"
+                        : "text-gray-300 hover:text-green-400"
                     }`}
                   >
                     Home
                   </button>
-                  <button 
-                    onClick={() => setCurrentPage('about')}
+                  <button
+                    onClick={() => setCurrentPage("about")}
                     className={`px-3 py-2 text-sm font-medium transition-colors ${
-                      currentPage === 'about' ? 'text-white' : 'text-gray-300 hover:text-green-400'
+                      currentPage === "about"
+                        ? "text-white"
+                        : "text-gray-300 hover:text-green-400"
                     }`}
                   >
                     About
                   </button>
-                  <button 
-                    onClick={() => setCurrentPage('service')}
+                  <button
+                    onClick={() => setCurrentPage("service")}
                     className={`px-3 py-2 text-sm font-medium transition-colors ${
-                      currentPage === 'service' ? 'text-white' : 'text-gray-300 hover:text-green-400'
+                      currentPage === "service"
+                        ? "text-white"
+                        : "text-gray-300 hover:text-green-400"
                     }`}
                   >
                     Services
                   </button>
-                  <button 
-                    onClick={() => setCurrentPage('faq')}
+                  <button
+                    onClick={() => setCurrentPage("faq")}
                     className={`px-3 py-2 text-sm font-medium transition-colors ${
-                      currentPage === 'faq' ? 'text-white' : 'text-gray-300 hover:text-green-400'
+                      currentPage === "faq"
+                        ? "text-white"
+                        : "text-gray-300 hover:text-green-400"
                     }`}
                   >
                     FAQ
                   </button>
-                  <button 
-                    onClick={() => setCurrentPage('contact')}
+                  <button
+                    onClick={() => setCurrentPage("contact")}
                     className={`px-3 py-2 text-sm font-medium transition-colors ${
-                      currentPage === 'contact' ? 'text-white' : 'text-gray-300 hover:text-green-400'
+                      currentPage === "contact"
+                        ? "text-white"
+                        : "text-gray-300 hover:text-green-400"
                     }`}
                   >
                     Contact
@@ -300,16 +418,40 @@ function HomePage() {
               </div>
             </div>
             <div className="hidden md:flex items-center space-x-4">
-              <button onClick={()=>{ navigate('/signup');}} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+              <button
+                onClick={() => {
+                  if (!userName) navigate("/login");
+                }}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                disabled={!!userName}
+                style={userName ? { opacity: 0.6, cursor: "not-allowed" } : {}}
+              >
                 Book Now
               </button>
+              {userName && (
+                <>
+                  <span className="ml-4 font-semibold text-green-400">
+                    Welcome, {userName}!
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="ml-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold shadow transition-colors"
+                  >
+                    Log Out
+                  </button>
+                </>
+              )}
             </div>
             <div className="md:hidden">
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="text-gray-400 hover:text-white focus:outline-none focus:text-white"
               >
-                {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                {isMenuOpen ? (
+                  <X className="h-6 w-6" />
+                ) : (
+                  <Menu className="h-6 w-6" />
+                )}
               </button>
             </div>
           </div>
@@ -319,47 +461,77 @@ function HomePage() {
         {isMenuOpen && (
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-gray-800">
-              <button 
-                onClick={() => { setCurrentPage('home'); setIsMenuOpen(false); }}
+              <button
+                onClick={() => {
+                  setCurrentPage("home");
+                  setIsMenuOpen(false);
+                }}
                 className={`block px-3 py-2 text-base font-medium w-full text-left ${
-                  currentPage === 'home' ? 'text-white' : 'text-gray-300 hover:text-white'
+                  currentPage === "home"
+                    ? "text-white"
+                    : "text-gray-300 hover:text-white"
                 }`}
               >
                 Home
               </button>
-              <button 
-                onClick={() => { setCurrentPage('about'); setIsMenuOpen(false); }}
+              <button
+                onClick={() => {
+                  setCurrentPage("about");
+                  setIsMenuOpen(false);
+                }}
                 className={`block px-3 py-2 text-base font-medium w-full text-left ${
-                  currentPage === 'about' ? 'text-white' : 'text-gray-300 hover:text-white'
+                  currentPage === "about"
+                    ? "text-white"
+                    : "text-gray-300 hover:text-white"
                 }`}
               >
                 About
               </button>
-              <button 
-                onClick={() => { setCurrentPage('service'); setIsMenuOpen(false); }}
+              <button
+                onClick={() => {
+                  setCurrentPage("service");
+                  setIsMenuOpen(false);
+                }}
                 className={`block px-3 py-2 text-base font-medium w-full text-left ${
-                  currentPage === 'service' ? 'text-white' : 'text-gray-300 hover:text-white'
+                  currentPage === "service"
+                    ? "text-white"
+                    : "text-gray-300 hover:text-white"
                 }`}
               >
                 Services
               </button>
-              <button 
-                onClick={() => { setCurrentPage('faq'); setIsMenuOpen(false); }}
+              <button
+                onClick={() => {
+                  setCurrentPage("faq");
+                  setIsMenuOpen(false);
+                }}
                 className={`block px-3 py-2 text-base font-medium w-full text-left ${
-                  currentPage === 'faq' ? 'text-white' : 'text-gray-300 hover:text-white'
+                  currentPage === "faq"
+                    ? "text-white"
+                    : "text-gray-300 hover:text-white"
                 }`}
               >
                 FAQ
               </button>
-              <button 
-                onClick={() => { setCurrentPage('contact'); setIsMenuOpen(false); }}
+              <button
+                onClick={() => {
+                  setCurrentPage("contact");
+                  setIsMenuOpen(false);
+                }}
                 className={`block px-3 py-2 text-base font-medium w-full text-left ${
-                  currentPage === 'contact' ? 'text-white' : 'text-gray-300 hover:text-white'
+                  currentPage === "contact"
+                    ? "text-white"
+                    : "text-gray-300 hover:text-white"
                 }`}
               >
                 Contact
               </button>
-              <button onClick={()=>{ navigate('/signup');}} className="w-full text-left bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg font-medium mt-4">
+              <button
+                onClick={() => {
+                  navigate("/signup");
+                }}
+                className="w-full text-left bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg font-medium mt-4"
+              >
                 Book Now
               </button>
             </div>
@@ -369,7 +541,7 @@ function HomePage() {
 
       {/* Page Content */}
       {renderPage()}
-      
+
       {/* Chatbot */}
       <Chatbot />
     </div>

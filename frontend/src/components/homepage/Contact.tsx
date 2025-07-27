@@ -1,81 +1,93 @@
-import React, { useState } from 'react';
-import { Phone, Mail, MapPin, Clock, Send, MessageCircle, AlertTriangle } from 'lucide-react';
+import React, { useState } from "react";
+import {
+  Phone,
+  Mail,
+  MapPin,
+  Clock,
+  Send,
+  MessageCircle,
+  AlertTriangle,
+} from "lucide-react";
 
 const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: ''
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Handle form submission here
-    console.log('Form submitted:', formData);
+    console.log("Form submitted:", formData);
     // Reset form
-    setFormData({ name: '', email: '', subject: '', message: '' });
+    setFormData({ name: "", email: "", subject: "", message: "" });
   };
 
   const contactInfo = [
     {
       icon: Phone,
-      title: 'Phone Support',
-      details: '+1 (555) 123-4567',
-      description: '24/7 customer support'
+      title: "Phone Support",
+      details: "+1 (555) 123-4567",
+      description: "24/7 customer support",
     },
     {
       icon: Mail,
-      title: 'Email Support',
-      details: 'support@e-ride.com',
-      description: 'Response within 2 hours'
+      title: "Email Support",
+      details: "support@e-ride.com",
+      description: "Response within 2 hours",
     },
     {
       icon: MapPin,
-      title: 'Headquarters',
-      details: '123 Green Street, San Francisco, CA 94102',
-      description: 'Visit our main office'
+      title: "Headquarters",
+      details: "123 Green Street, San Francisco, CA 94102",
+      description: "Visit our main office",
     },
     {
       icon: Clock,
-      title: 'Business Hours',
-      details: 'Mon-Fri: 6AM-10PM, Sat-Sun: 8AM-8PM',
-      description: 'Office hours (PST)'
-    }
+      title: "Business Hours",
+      details: "Mon-Fri: 6AM-10PM, Sat-Sun: 8AM-8PM",
+      description: "Office hours (PST)",
+    },
   ];
 
   const offices = [
     {
-      city: 'San Francisco',
-      address: '123 Green Street, CA 94102',
-      phone: '+1 (555) 123-4567',
-      email: 'sf@e-ride.com'
+      city: "San Francisco",
+      address: "123 Green Street, CA 94102",
+      phone: "+1 (555) 123-4567",
+      email: "sf@e-ride.com",
     },
     {
-      city: 'New York',
-      address: '456 Broadway, NY 10013',
-      phone: '+1 (555) 234-5678',
-      email: 'ny@e-ride.com'
+      city: "New York",
+      address: "456 Broadway, NY 10013",
+      phone: "+1 (555) 234-5678",
+      email: "ny@e-ride.com",
     },
     {
-      city: 'Los Angeles',
-      address: '789 Sunset Blvd, CA 90028',
-      phone: '+1 (555) 345-6789',
-      email: 'la@e-ride.com'
+      city: "Los Angeles",
+      address: "789 Sunset Blvd, CA 90028",
+      phone: "+1 (555) 345-6789",
+      email: "la@e-ride.com",
     },
     {
-      city: 'Chicago',
-      address: '321 Michigan Ave, IL 60601',
-      phone: '+1 (555) 456-7890',
-      email: 'chicago@e-ride.com'
-    }
+      city: "Chicago",
+      address: "321 Michigan Ave, IL 60601",
+      phone: "+1 (555) 456-7890",
+      email: "chicago@e-ride.com",
+    },
   ];
 
   return (
@@ -87,7 +99,7 @@ const Contact: React.FC = () => {
             Get in <span className="text-green-400">Touch</span>
           </h1>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
-            Have questions, feedback, or need assistance? We're here to help! 
+            Have questions, feedback, or need assistance? We're here to help!
             Reach out to our friendly support team anytime.
           </p>
         </div>
@@ -103,7 +115,9 @@ const Contact: React.FC = () => {
                   <info.icon className="w-8 h-8 text-green-400" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">{info.title}</h3>
-                <p className="text-green-400 font-medium mb-1">{info.details}</p>
+                <p className="text-green-400 font-medium mb-1">
+                  {info.details}
+                </p>
                 <p className="text-gray-400 text-sm">{info.description}</p>
               </div>
             ))}
@@ -121,7 +135,10 @@ const Contact: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium mb-2">
+                    <label
+                      htmlFor="name"
+                      className="block text-sm font-medium mb-2"
+                    >
                       Full Name
                     </label>
                     <input
@@ -136,7 +153,10 @@ const Contact: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium mb-2">
+                    <label
+                      htmlFor="email"
+                      className="block text-sm font-medium mb-2"
+                    >
                       Email Address
                     </label>
                     <input
@@ -152,7 +172,10 @@ const Contact: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="subject" className="block text-sm font-medium mb-2">
+                  <label
+                    htmlFor="subject"
+                    className="block text-sm font-medium mb-2"
+                  >
                     Subject
                   </label>
                   <select
@@ -173,7 +196,10 @@ const Contact: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="message" className="block text-sm font-medium mb-2">
+                  <label
+                    htmlFor="message"
+                    className="block text-sm font-medium mb-2"
+                  >
                     Message
                   </label>
                   <textarea
@@ -202,15 +228,21 @@ const Contact: React.FC = () => {
               <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6">
                 <div className="flex items-center mb-4">
                   <AlertTriangle className="w-6 h-6 text-red-400 mr-3" />
-                  <h3 className="text-xl font-semibold text-red-400">Emergency Support</h3>
+                  <h3 className="text-xl font-semibold text-red-400">
+                    Emergency Support
+                  </h3>
                 </div>
                 <p className="text-gray-300 mb-4">
-                  If you're experiencing an emergency while riding (accident, breakdown, theft), 
-                  contact our emergency hotline immediately.
+                  If you're experiencing an emergency while riding (accident,
+                  breakdown, theft), contact our emergency hotline immediately.
                 </p>
                 <div className="space-y-2">
-                  <p className="text-white font-semibold">Emergency Hotline: +1 (555) 911-BIKE</p>
-                  <p className="text-gray-400 text-sm">Available 24/7 for urgent assistance</p>
+                  <p className="text-white font-semibold">
+                    Emergency Hotline: +1 (555) 911-BIKE
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    Available 24/7 for urgent assistance
+                  </p>
                 </div>
               </div>
 
@@ -220,7 +252,8 @@ const Contact: React.FC = () => {
                   <h3 className="text-xl font-semibold">Live Chat</h3>
                 </div>
                 <p className="text-gray-300 mb-4">
-                  Get instant help from our support team. Average response time is under 2 minutes.
+                  Get instant help from our support team. Average response time
+                  is under 2 minutes.
                 </p>
                 <button className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors">
                   Start Live Chat
@@ -230,16 +263,28 @@ const Contact: React.FC = () => {
               <div className="bg-gray-800 rounded-xl p-6">
                 <h3 className="text-xl font-semibold mb-4">Quick Links</h3>
                 <div className="space-y-3">
-                  <a href="#" className="block text-green-400 hover:text-green-300 transition-colors">
+                  <a
+                    href="#"
+                    className="block text-green-400 hover:text-green-300 transition-colors"
+                  >
                     → Download Mobile App
                   </a>
-                  <a href="#" className="block text-green-400 hover:text-green-300 transition-colors">
+                  <a
+                    href="#"
+                    className="block text-green-400 hover:text-green-300 transition-colors"
+                  >
                     → Safety Guidelines
                   </a>
-                  <a href="#" className="block text-green-400 hover:text-green-300 transition-colors">
+                  <a
+                    href="#"
+                    className="block text-green-400 hover:text-green-300 transition-colors"
+                  >
                     → Terms of Service
                   </a>
-                  <a href="#" className="block text-green-400 hover:text-green-300 transition-colors">
+                  <a
+                    href="#"
+                    className="block text-green-400 hover:text-green-300 transition-colors"
+                  >
                     → Privacy Policy
                   </a>
                 </div>
@@ -254,12 +299,19 @@ const Contact: React.FC = () => {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold mb-4">Our Offices</h2>
-            <p className="text-gray-300 text-lg">Visit us at any of our locations across the country</p>
+            <p className="text-gray-300 text-lg">
+              Visit us at any of our locations across the country
+            </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {offices.map((office, index) => (
-              <div key={index} className="bg-gray-800 p-6 rounded-xl hover:bg-gray-750 transition-colors">
-                <h3 className="text-xl font-semibold mb-3 text-green-400">{office.city}</h3>
+              <div
+                key={index}
+                className="bg-gray-800 p-6 rounded-xl hover:bg-gray-750 transition-colors"
+              >
+                <h3 className="text-xl font-semibold mb-3 text-green-400">
+                  {office.city}
+                </h3>
                 <div className="space-y-2 text-gray-300">
                   <p className="flex items-start">
                     <MapPin className="w-4 h-4 mr-2 mt-1 flex-shrink-0" />
@@ -283,7 +335,9 @@ const Contact: React.FC = () => {
       {/* CTA Section */}
       <section className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-4">Ready to Start Your Journey?</h2>
+          <h2 className="text-3xl font-bold mb-4">
+            Ready to Start Your Journey?
+          </h2>
           <p className="text-gray-300 text-lg mb-8">
             Don't wait! Download our app and book your first e-bike ride today.
           </p>

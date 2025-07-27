@@ -11,7 +11,6 @@ provider "aws" {
   region = var.region
 }
  
-# Bookings Table (existing - unchanged)
 resource "aws_dynamodb_table" "bookings_table" {
   name         = "bookings-table-${var.environment}"
   billing_mode = "PAY_PER_REQUEST"
