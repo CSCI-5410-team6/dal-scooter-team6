@@ -17,6 +17,10 @@ data "aws_dynamodb_table" "bikes_table" {
   name = "bikes-table-${var.environment}"
 }
 
+data "aws_dynamodb_table" "bookings_table" {
+  name = "bookings-table-${var.environment}"
+}
+
 # S3 
 resource "aws_s3_bucket" "bike_images" {
   bucket = "dalscooter-bike-images-${var.environment}"
@@ -92,7 +96,15 @@ resource "aws_iam_policy" "lambda_policy" {
         ]
         Resource = [
           data.aws_dynamodb_table.bikes_table.arn,
+          data.aws_dynamodb_table.bookings_table.arn,
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = "*"
       },
       {
         Effect = "Allow"
@@ -191,6 +203,53 @@ resource "aws_lambda_function" "delete-bike" {
   environment {
     variables = {
       BIKES_TABLE = "bikes-table-${var.environment}"
+    }
+  }
+  tags = local.common_tags
+}
+
+# Lambda Functions for Booking/Availability
+resource "aws_lambda_function" "get-availability" {
+  filename         = "../../../../backend/lambda_functions/get_availability.py.zip"
+  function_name    = "getAvailabilityLambda-${var.environment}"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "get_availability.lambda_handler"
+  runtime          = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_availability.py.zip")
+  environment {
+    variables = {
+      BOOKINGS_TABLE = "bookings-table-${var.environment}"
+    }
+  }
+  tags = local.common_tags
+}
+
+resource "aws_lambda_function" "create-booking" {
+  filename         = "../../../../backend/lambda_functions/create_booking.py.zip"
+  function_name    = "createBookingLambda-${var.environment}"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "create_booking.lambda_handler"
+  runtime          = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/create_booking.py.zip")
+  environment {
+    variables = {
+      BOOKINGS_TABLE = "bookings-table-${var.environment}"
+      SNS_TOPIC_ARN  = var.sns_topic_arn
+    }
+  }
+  tags = local.common_tags
+}
+
+resource "aws_lambda_function" "get-booking" {
+  filename         = "../../../../backend/lambda_functions/get_booking.py.zip"
+  function_name    = "getBookingLambda-${var.environment}"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "get_booking.lambda_handler"
+  runtime          = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_booking.py.zip")
+  environment {
+    variables = {
+      BOOKINGS_TABLE = "bookings-table-${var.environment}"
     }
   }
   tags = local.common_tags
@@ -466,9 +525,256 @@ resource "aws_api_gateway_authorizer" "cognito" {
   identity_source        = "method.request.header.Authorization"
 }
 
+# ===========================
+# /availability/{bikeId} (GET) Endpoint
+# ===========================
+
+resource "aws_api_gateway_resource" "availability" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  parent_id   = aws_api_gateway_rest_api.this.root_resource_id
+  path_part   = "availability"
+}
+
+resource "aws_api_gateway_resource" "availability_bike_id" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  parent_id   = aws_api_gateway_resource.availability.id
+  path_part   = "{bikeId}"
+}
+
+resource "aws_api_gateway_method" "availability_bike_id_get" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.availability_bike_id.id
+  http_method   = "GET"
+  authorization = "NONE" # Public endpoint
+  request_parameters = {
+    "method.request.path.bikeId"       = true
+    "method.request.querystring.date"  = false # Optional query parameter
+  }
+}
+
+resource "aws_api_gateway_integration" "availability_bike_id_get" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.availability_bike_id.id
+  http_method             = aws_api_gateway_method.availability_bike_id_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:getAvailabilityLambda-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "availability_bike_id_get" {
+  statement_id  = "AllowAPIGatewayInvokeGetAvailability"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get-availability.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/GET/availability/*"
+}
+
+# CORS for /availability/{bikeId}
+resource "aws_api_gateway_method" "availability_bike_id_options" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.availability_bike_id.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "availability_bike_id_options" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.availability_bike_id.id
+  http_method = aws_api_gateway_method.availability_bike_id_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "availability_bike_id_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.availability_bike_id.id
+  http_method = aws_api_gateway_method.availability_bike_id_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "availability_bike_id_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.availability_bike_id.id
+  http_method = aws_api_gateway_method.availability_bike_id_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+  }
+  depends_on = [aws_api_gateway_integration.availability_bike_id_options]
+}
+
+# ===========================
+# /booking (POST) Endpoint
+# ===========================
+
+resource "aws_api_gateway_resource" "booking" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  parent_id   = aws_api_gateway_rest_api.this.root_resource_id
+  path_part   = "booking"
+}
+
+resource "aws_api_gateway_method" "booking_post" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.booking.id
+  http_method   = "POST"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+resource "aws_api_gateway_integration" "booking_post" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.booking.id
+  http_method             = aws_api_gateway_method.booking_post.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:createBookingLambda-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "booking_post" {
+  statement_id  = "AllowAPIGatewayInvokeCreateBooking"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.create-booking.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/POST/booking"
+}
+
+# CORS for /booking
+resource "aws_api_gateway_method" "booking_options" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.booking.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "booking_options" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.booking.id
+  http_method = aws_api_gateway_method.booking_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "booking_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.booking.id
+  http_method = aws_api_gateway_method.booking_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "booking_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.booking.id
+  http_method = aws_api_gateway_method.booking_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+  }
+  depends_on = [aws_api_gateway_integration.booking_options]
+}
+
+# ===========================
+# /booking/{referenceCode} (GET) Endpoint
+# ===========================
+
+resource "aws_api_gateway_resource" "booking_reference_code" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  parent_id   = aws_api_gateway_resource.booking.id
+  path_part   = "{referenceCode}"
+}
+
+resource "aws_api_gateway_method" "booking_reference_code_get" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.booking_reference_code.id
+  http_method   = "GET"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+  request_parameters = {
+    "method.request.path.referenceCode" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "booking_reference_code_get" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.booking_reference_code.id
+  http_method             = aws_api_gateway_method.booking_reference_code_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:getBookingLambda-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "booking_reference_code_get" {
+  statement_id  = "AllowAPIGatewayInvokeGetBooking"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get-booking.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/GET/booking/*"
+}
+
+# CORS for /booking/{referenceCode}
+resource "aws_api_gateway_method" "booking_reference_code_options" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.booking_reference_code.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "booking_reference_code_options" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.booking_reference_code.id
+  http_method = aws_api_gateway_method.booking_reference_code_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+resource "aws_api_gateway_method_response" "booking_reference_code_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.booking_reference_code.id
+  http_method = aws_api_gateway_method.booking_reference_code_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "booking_reference_code_options_200" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  resource_id = aws_api_gateway_resource.booking_reference_code.id
+  http_method = aws_api_gateway_method.booking_reference_code_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+  }
+  depends_on = [aws_api_gateway_integration.booking_reference_code_options]
+}
+
 # --- Deployment ---
 resource "aws_api_gateway_deployment" "this" {
   depends_on = [
+    # Existing bike endpoints
     aws_api_gateway_integration.bikes_post,
     aws_api_gateway_integration.bikes_get,
     aws_api_gateway_integration.bikes_options,
@@ -479,6 +785,19 @@ resource "aws_api_gateway_deployment" "this" {
     aws_api_gateway_integration.bike_id_delete,
     aws_api_gateway_integration.update_bike_options,
     aws_api_gateway_integration_response.update_bike_options_200,
+    
+    # New booking/availability endpoints
+    aws_api_gateway_integration.availability_bike_id_get,
+    aws_api_gateway_integration.availability_bike_id_options,
+    aws_api_gateway_integration_response.availability_bike_id_options_200,
+    
+    aws_api_gateway_integration.booking_post,
+    aws_api_gateway_integration.booking_options,
+    aws_api_gateway_integration_response.booking_options_200,
+    
+    aws_api_gateway_integration.booking_reference_code_get,
+    aws_api_gateway_integration.booking_reference_code_options,
+    aws_api_gateway_integration_response.booking_reference_code_options_200,
   ]
   rest_api_id = aws_api_gateway_rest_api.this.id
   stage_name  = var.environment

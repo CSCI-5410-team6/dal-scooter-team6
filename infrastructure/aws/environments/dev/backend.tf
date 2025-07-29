@@ -59,6 +59,7 @@ module "api_gateway" {
   project_name             = var.project_name
   environment              = var.environment
   cognito_user_pool_arn    = module.cognito.user_pool_arn
+  sns_topic_arn            = module.sns.sns_topic_arn
 }
 
 variable "environment" {
