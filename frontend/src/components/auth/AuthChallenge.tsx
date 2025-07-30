@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Auth } from 'aws-amplify';
-import '../../config/amplifyConfig'; // Import the config
+import { Auth } from "aws-amplify";
+import "../../config/amplifyConfig"; // Import the config
 import { useAuthContext } from "../../contextStore/AuthContext"; // Import Auth context
-import { Lock, Eye, EyeOff, ArrowRight, Shield, Key } from 'lucide-react';
- 
+import { Lock, Eye, EyeOff, ArrowRight, Shield, Key } from "lucide-react";
+
 const AuthChallenge: React.FC = () => {
   const { cognitoUser, setCognitoUser } = useAuthContext();
   const [challengeAnswer, setChallengeAnswer] = useState("");
@@ -19,79 +19,112 @@ const AuthChallenge: React.FC = () => {
   const [challengeShift, setChallengeShift] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
-  const { email: stateEmail, challengeSession: initialSession, challengeParameters } = location.state || {};
- 
+  const {
+    email: stateEmail,
+    challengeSession: initialSession,
+    challengeParameters,
+  } = location.state || {};
+
   const email = stateEmail || localStorage.getItem("authEmail") || "";
- 
+
   useEffect(() => {
     console.log("Challenge parameters received:", challengeParameters);
     if (challengeParameters) {
       if (challengeParameters.question) {
         setChallengeQuestion(challengeParameters.question);
-        setView('question');
+        setView("question");
       } else if (challengeParameters.cipherChallenge) {
         setChallengeClue(challengeParameters.cipherChallenge);
         setChallengeShift(challengeParameters.cipherShift);
-        setView('caesar');
+        setView("caesar");
       }
     }
     if (initialSession) {
       setChallengeSession(initialSession);
     }
   }, [challengeParameters, initialSession]);
- 
+
   const handleChallengeAnswer = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
     setLoading(true);
- 
+
     if (!challengeAnswer) {
-      setError('Please provide an answer.');
+      setError("Please provide an answer.");
       setLoading(false);
       return;
     }
- 
+
     try {
-      console.log('challenge session', challengeSession || cognitoUser);
-      console.log('challenge answer', challengeAnswer);
-     
+      console.log("challenge session", challengeSession || cognitoUser);
+      console.log("challenge answer", challengeAnswer);
+
       const sessionToUse = challengeSession || cognitoUser;
-      const response = await Auth.sendCustomChallengeAnswer(sessionToUse, challengeAnswer.trim());
-      console.log('Challenge response:', response);
- 
-      if (response.challengeName === 'CUSTOM_CHALLENGE') {
+      const response = await Auth.sendCustomChallengeAnswer(
+        sessionToUse,
+        challengeAnswer.trim()
+      );
+      console.log("Challenge response:", response);
+
+      if (response.challengeName === "CUSTOM_CHALLENGE") {
         setChallengeSession(response);
         setCognitoUser(response); // Update context
         setChallengeType(response.challengeParam.challengeMetadata);
-        console.log('Response ::::::::', response);
- 
-        if (response.challengeParam.challengeMetadata === 'QUESTION_CHALLENGE') {
-          setChallengeQuestion(response.challengeParam.publicChallengeParameters.question);
-          setView('question');
+        console.log("Response ::::::::", response);
+
+        if (
+          response.challengeParam.challengeMetadata === "QUESTION_CHALLENGE"
+        ) {
+          setChallengeQuestion(
+            response.challengeParam.publicChallengeParameters.question
+          );
+          setView("question");
         } else {
-          console.log('challengeParam ::::::::', response.challengeParam);
+          console.log("challengeParam ::::::::", response.challengeParam);
           setChallengeClue(response.challengeParam.clue);
           setChallengeShift(response.challengeParam.shift);
-          setView('caesar');
+          setView("caesar");
         }
-        setChallengeAnswer('');
+        setChallengeAnswer("");
       } else {
-        setSuccess('Login successful!');
+        setSuccess("Login successful!");
         console.log("🎉 Authentication successful!");
-        setTimeout(() => navigate("/dashboard"), 1500);
+
+        // Navigate immediately after successful login
+        const userDataKey = Object.keys(localStorage).find((key) =>
+          key.endsWith(".userData")
+        );
+        if (userDataKey) {
+          const userDataStr = localStorage.getItem(userDataKey);
+          if (userDataStr) {
+            try {
+              const userData = JSON.parse(userDataStr);
+              const attrs = userData.UserAttributes || [];
+              const userTypeAttr = attrs.find(
+                (a: any) => a.Name === "custom:userType"
+              );
+              if (userTypeAttr && userTypeAttr.Value === "admin") {
+                navigate("/admin");
+                return;
+              }
+            } catch {}
+          }
+        }
+        navigate("/");
+        return; // Exit early to prevent finally block from setting loading to false
       }
     } catch (err: any) {
-      console.error('Challenge error:', err);
-      setError('Challenge response failed. Please try again.');
-      setChallengeAnswer('');
+      console.error("Challenge error:", err);
+      setError("Challenge response failed. Please try again.");
+      setChallengeAnswer("");
     } finally {
       setLoading(false);
     }
   };
- 
+
   const handleBack = () => navigate("/login");
- 
+
   const renderQuestionView = () => (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
@@ -130,7 +163,10 @@ const AuthChallenge: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="challengeAnswer" className="block text-sm font-medium text-gray-300 mb-2">
+              <label
+                htmlFor="challengeAnswer"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
                 Your Answer
               </label>
               <div className="relative">
@@ -139,7 +175,9 @@ const AuthChallenge: React.FC = () => {
                   type="text"
                   id="challengeAnswer"
                   value={challengeAnswer}
-                  onChange={(e) => setChallengeAnswer(e.target.value.toLowerCase())}
+                  onChange={(e) =>
+                    setChallengeAnswer(e.target.value.toLowerCase())
+                  }
                   className="w-full pl-12 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent transition-all duration-200"
                   placeholder="Enter your answer"
                   required
@@ -184,7 +222,7 @@ const AuthChallenge: React.FC = () => {
       </div>
     </div>
   );
- 
+
   const renderCaesarView = () => (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
@@ -242,7 +280,8 @@ const AuthChallenge: React.FC = () => {
                 How to solve:
               </h3>
               <p className="text-sm text-lime-300">
-                Shift each letter -{challengeShift || "?"} positions backward in the alphabet.
+                Shift each letter -{challengeShift || "?"} positions backward in
+                the alphabet.
               </p>
               <p className="text-xs text-lime-400 mt-1">
                 Example: If shift is 3, then D→A, E→B, F→C, etc.
@@ -250,7 +289,10 @@ const AuthChallenge: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="challengeAnswer" className="block text-sm font-medium text-gray-300 mb-2">
+              <label
+                htmlFor="challengeAnswer"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
                 Your Answer
               </label>
               <div className="relative">
@@ -304,8 +346,8 @@ const AuthChallenge: React.FC = () => {
       </div>
     </div>
   );
- 
-  return view === 'question' ? renderQuestionView() : renderCaesarView();
+
+  return view === "question" ? renderQuestionView() : renderCaesarView();
 };
- 
+
 export default AuthChallenge;

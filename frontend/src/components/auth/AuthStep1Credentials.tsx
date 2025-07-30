@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Auth } from 'aws-amplify';
-import '../../config/amplifyConfig';
+import { Auth } from "aws-amplify";
+import "../../config/amplifyConfig";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuthContext } from "../../contextStore/AuthContext";
 export let tempUser: any = null;
- 
+
 const AuthStep1Credentials: React.FC = () => {
   const { setCognitoUser } = useAuthContext();
   const [email, setEmail] = useState("");
@@ -15,66 +15,65 @@ const AuthStep1Credentials: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
- 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
- 
+
     // Validation
     if (!email || !password) {
       setError("Please fill in all fields");
       setLoading(false);
       return;
     }
- 
+
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       setError("Please enter a valid email address.");
       setLoading(false);
       return;
     }
- 
+
     try {
       console.log("Attempting to sign in with:", { email });
- 
+
       // Initiate authentication with Cognito
       const session = await Auth.signIn({
         username: email,
-        password: password
+        password: password,
       });
       setCognitoUser(session);
       console.log("SignIn response:", session);
- 
+
       // Handle different challenge states
       switch (session.challengeName) {
-        case 'PASSWORD_VERIFIER':
+        case "PASSWORD_VERIFIER":
           // Password verification successful, proceed to Q&A challenge
           console.log("Password verified, proceeding to Q&A challenge");
           navigate("/auth-challenge", {
             state: {
               email,
               challengeSession: session,
-              challengeName: 'CUSTOM_CHALLENGE_QA',
+              challengeName: "CUSTOM_CHALLENGE_QA",
               challengeParameters: session.challengeParam || {},
             },
           });
           break;
- 
-        case 'CUSTOM_CHALLENGE':
+
+        case "CUSTOM_CHALLENGE":
           // This could be either Q&A or Cipher challenge
           // Check private challenge parameters to determine which one
           tempUser = session;
- 
+
           if (session.challengeParam?.question) {
             console.log("Q&A challenge detected");
- 
+
             // 🔐 Store the Session token in localStorage
-           
- 
+
             navigate("/auth-challenge", {
               state: {
                 email,
-                challengeName: 'CUSTOM_CHALLENGE_QA',
+                challengeName: "CUSTOM_CHALLENGE_QA",
                 challengeParameters: session.challengeParam || {},
               },
             });
@@ -84,40 +83,59 @@ const AuthStep1Credentials: React.FC = () => {
               state: {
                 email,
                 challengeSession: session,
-                challengeName: 'CUSTOM_CHALLENGE_CIPHER',
+                challengeName: "CUSTOM_CHALLENGE_CIPHER",
                 challengeParameters: session.challengeParam || {},
               },
             });
           }
           break;
- 
-        case 'NEW_PASSWORD_REQUIRED':
+
+        case "NEW_PASSWORD_REQUIRED":
           setError("Password reset required. Please reset your password.");
           break;
- 
-        case 'MFA_SETUP':
-        case 'SMS_MFA':
-        case 'SOFTWARE_TOKEN_MFA':
+
+        case "MFA_SETUP":
+        case "SMS_MFA":
+        case "SOFTWARE_TOKEN_MFA":
           setError("MFA setup required. Please complete MFA setup.");
           break;
- 
+
         case null:
         case undefined:
           // No challenge means authentication is complete
           try {
             await Auth.currentSession(); // Verify tokens are available
-            navigate("/dashboard");
+            // Check user type from .userData
+            const userDataKey = Object.keys(localStorage).find((key) =>
+              key.endsWith(".userData")
+            );
+            if (userDataKey) {
+              const userDataStr = localStorage.getItem(userDataKey);
+              if (userDataStr) {
+                try {
+                  const userData = JSON.parse(userDataStr);
+                  const attrs = userData.UserAttributes || [];
+                  const userTypeAttr = attrs.find(
+                    (a: any) => a.Name === "custom:userType"
+                  );
+                  if (userTypeAttr && userTypeAttr.Value === "admin") {
+                    navigate("/admin");
+                    break;
+                  }
+                } catch {}
+              }
+            }
+            navigate("/");
           } catch (sessionError) {
             console.error("Token/session not available:", sessionError);
             setError("Login succeeded but session could not be established.");
           }
           break;
- 
+
         default:
           console.warn("Unhandled challenge:", session.challengeName);
           setError(`Unsupported challenge: ${session.challengeName}`);
       }
- 
     } catch (error: any) {
       console.error("Login error:", error);
       handleAuthError(error);
@@ -125,7 +143,7 @@ const AuthStep1Credentials: React.FC = () => {
       setLoading(false);
     }
   };
- 
+
   const handleAuthError = (error: any) => {
     if (error.name === "NotAuthorizedException") {
       setError("Invalid email or password.");
@@ -137,14 +155,15 @@ const AuthStep1Credentials: React.FC = () => {
         navigate("/verify-email", { state: { email } });
       }, 2000);
     } else if (error?.message?.includes("NewDeviceMetadata")) {
-      setError("Device metadata missing. Please try again on a trusted browser.");
+      setError(
+        "Device metadata missing. Please try again on a trusted browser."
+      );
     } else if (error.name === "InvalidParameterException") {
       setError("Invalid login parameters. Please try again.");
     } else {
-      setError(`Login failed: ${error.message || 'Unknown error occurred'}`);
+      setError(`Login failed: ${error.message || "Unknown error occurred"}`);
     }
   };
- 
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
@@ -155,7 +174,9 @@ const AuthStep1Credentials: React.FC = () => {
               <Lock className="w-8 h-8 text-gray-900" />
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-            <p className="text-gray-400">Step 1: Sign in with your credentials</p>
+            <p className="text-gray-400">
+              Step 1: Sign in with your credentials
+            </p>
           </div>
 
           {error && (
@@ -166,7 +187,10 @@ const AuthStep1Credentials: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
                 Email Address
               </label>
               <div className="relative">
@@ -185,7 +209,10 @@ const AuthStep1Credentials: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
                 Password
               </label>
               <div className="relative">
@@ -206,7 +233,11 @@ const AuthStep1Credentials: React.FC = () => {
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors duration-200"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
