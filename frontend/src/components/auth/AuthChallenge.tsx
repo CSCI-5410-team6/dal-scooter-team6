@@ -90,28 +90,29 @@ const AuthChallenge: React.FC = () => {
       } else {
         setSuccess("Login successful!");
         console.log("🎉 Authentication successful!");
-        setTimeout(() => {
-          const userDataKey = Object.keys(localStorage).find((key) =>
-            key.endsWith(".userData")
-          );
-          if (userDataKey) {
-            const userDataStr = localStorage.getItem(userDataKey);
-            if (userDataStr) {
-              try {
-                const userData = JSON.parse(userDataStr);
-                const attrs = userData.UserAttributes || [];
-                const userTypeAttr = attrs.find(
-                  (a: any) => a.Name === "custom:userType"
-                );
-                if (userTypeAttr && userTypeAttr.Value === "admin") {
-                  navigate("/admin");
-                  return;
-                }
-              } catch {}
-            }
+
+        // Navigate immediately after successful login
+        const userDataKey = Object.keys(localStorage).find((key) =>
+          key.endsWith(".userData")
+        );
+        if (userDataKey) {
+          const userDataStr = localStorage.getItem(userDataKey);
+          if (userDataStr) {
+            try {
+              const userData = JSON.parse(userDataStr);
+              const attrs = userData.UserAttributes || [];
+              const userTypeAttr = attrs.find(
+                (a: any) => a.Name === "custom:userType"
+              );
+              if (userTypeAttr && userTypeAttr.Value === "admin") {
+                navigate("/admin");
+                return;
+              }
+            } catch {}
           }
-          navigate("/");
-        }, 1500);
+        }
+        navigate("/");
+        return; // Exit early to prevent finally block from setting loading to false
       }
     } catch (err: any) {
       console.error("Challenge error:", err);

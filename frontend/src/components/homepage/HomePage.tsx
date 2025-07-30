@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Menu,
   X,
@@ -19,10 +19,27 @@ import Contact from "./Contact";
 import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../contextStore/AuthContext";
 import { Auth } from "aws-amplify";
+import API_CONFIG from "../../config/apiConfig";
+
+interface Bike {
+  bikeId: string;
+  type: string;
+  hourlyRate: number;
+  discountCode: string;
+  imageUrl: string;
+  features: {
+    batteryLife: string;
+    heightAdjustable: string;
+  };
+  createdAt: string;
+}
 
 function HomePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState("home");
+  const [bikes, setBikes] = useState<Bike[]>([]);
+  const [bikesLoading, setBikesLoading] = useState(false);
+  const [bikesError, setBikesError] = useState("");
   const navigate = useNavigate();
   const { cognitoUser, setCognitoUser } = useAuthContext();
 
@@ -83,6 +100,54 @@ function HomePage() {
   const debugInfo = getUserNameAndDebug();
   const userName = debugInfo.name;
 
+  // Fetch all bikes
+  const fetchBikes = useCallback(async () => {
+    setBikesLoading(true);
+    setBikesError("");
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+      // Prepare headers
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      // Add authorization header if user is logged in
+      if (idToken) {
+        headers.Authorization = idToken;
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.BIKES.GET_ALL}`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log("HomePage: Fetched bikes:", data);
+      setBikes(data);
+    } catch (err: any) {
+      setBikesError(err.message || "Failed to fetch bikes.");
+    } finally {
+      setBikesLoading(false);
+    }
+  }, []);
+
+  // Load bikes on component mount
+  useEffect(() => {
+    console.log("HomePage: Component mounted, fetching bikes...");
+    fetchBikes();
+  }, [fetchBikes]);
+
   // Log out handler
   const handleLogout = async () => {
     try {
@@ -98,35 +163,56 @@ function HomePage() {
     navigate("/");
   };
 
-  const featuredBikes = [
-    {
-      id: 1,
-      name: "Urban Explorer 2024",
-      image:
-        "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
-      rating: 4.8,
-      price: "$15/hour",
-      features: ["40km Range", "Smart Lock", "GPS Tracking"],
-    },
-    {
-      id: 2,
-      name: "Mountain Beast Pro",
-      image:
-        "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
-      rating: 4.9,
-      price: "$20/hour",
-      features: ["60km Range", "All-Terrain", "Quick Charge"],
-    },
-    {
-      id: 3,
-      name: "City Cruiser Deluxe",
-      image:
-        "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
-      rating: 4.7,
-      price: "$12/hour",
-      features: ["35km Range", "Comfort Seat", "LED Lights"],
-    },
-  ];
+  // Use real bikes from API, fallback to dummy data if API fails
+  const featuredBikes =
+    bikes.length > 0
+      ? bikes.slice(0, 3).map((bike, index) => ({
+          id: index + 1,
+          name: bike.type,
+          image:
+            bike.imageUrl ||
+            "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
+          rating: 4.8,
+          price: `$${bike.hourlyRate}/hour`,
+          features: [
+            `Battery: ${bike.features.batteryLife}`,
+            `Height Adjustable: ${
+              bike.features.heightAdjustable === "true" ? "Yes" : "No"
+            }`,
+            bike.discountCode
+              ? `Discount: ${bike.discountCode}`
+              : "Premium Service",
+          ],
+        }))
+      : [
+          {
+            id: 1,
+            name: "Urban Explorer 2024",
+            image:
+              "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
+            rating: 4.8,
+            price: "$15/hour",
+            features: ["40km Range", "Smart Lock", "GPS Tracking"],
+          },
+          {
+            id: 2,
+            name: "Mountain Beast Pro",
+            image:
+              "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
+            rating: 4.9,
+            price: "$20/hour",
+            features: ["60km Range", "All-Terrain", "Quick Charge"],
+          },
+          {
+            id: 3,
+            name: "City Cruiser Deluxe",
+            image:
+              "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
+            rating: 4.7,
+            price: "$12/hour",
+            features: ["35km Range", "Comfort Seat", "LED Lights"],
+          },
+        ];
 
   const renderPage = () => {
     switch (currentPage) {
@@ -164,7 +250,10 @@ function HomePage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <button className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 flex items-center justify-center group">
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 flex items-center justify-center group"
+                >
                   GET BIKE
                   <ChevronRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </button>
@@ -217,52 +306,74 @@ function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredBikes.map((bike) => (
-              <div
-                key={bike.id}
-                className="bg-gray-800 rounded-xl overflow-hidden hover:bg-gray-750 transition-all duration-300 transform hover:scale-105 border border-gray-700"
+          {bikesLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+              <p className="text-gray-300">Loading bikes...</p>
+            </div>
+          ) : bikesError ? (
+            <div className="text-center py-8">
+              <p className="text-red-400 mb-4">{bikesError}</p>
+              <button
+                onClick={fetchBikes}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
               >
-                <div className="relative">
-                  <img
-                    src={bike.image}
-                    alt={bike.name}
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                    {bike.price}
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-semibold">{bike.name}</h3>
-                    <div className="flex items-center space-x-1">
-                      <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                      <span className="text-sm text-gray-300">
-                        {bike.rating}
-                      </span>
+                Retry
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {featuredBikes.map((bike) => (
+                <div
+                  key={bike.id}
+                  className="bg-gray-800 rounded-xl overflow-hidden hover:bg-gray-750 transition-all duration-300 transform hover:scale-105 border border-gray-700"
+                >
+                  <div className="relative">
+                    <img
+                      src={bike.image}
+                      alt={bike.name}
+                      className="w-full h-48 object-cover"
+                    />
+                    <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                      {bike.price}
                     </div>
                   </div>
-                  <div className="space-y-2 mb-4">
-                    {bike.features.map((feature, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                        <span className="text-sm text-gray-300">{feature}</span>
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xl font-semibold">{bike.name}</h3>
+                      <div className="flex items-center space-x-1">
+                        <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                        <span className="text-sm text-gray-300">
+                          {bike.rating}
+                        </span>
                       </div>
-                    ))}
+                    </div>
+                    <div className="space-y-2 mb-4">
+                      {bike.features.map((feature, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center space-x-2"
+                        >
+                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                          <span className="text-sm text-gray-300">
+                            {feature}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigate("/dashboard");
+                      }}
+                      className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors"
+                    >
+                      Book Now
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      navigate("/signup");
-                    }}
-                    className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors"
-                  >
-                    Book Now
-                  </button>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -420,11 +531,13 @@ function HomePage() {
             <div className="hidden md:flex items-center space-x-4">
               <button
                 onClick={() => {
-                  if (!userName) navigate("/login");
+                  if (!userName) {
+                    navigate("/login");
+                  } else {
+                    navigate("/dashboard");
+                  }
                 }}
                 className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                disabled={!!userName}
-                style={userName ? { opacity: 0.6, cursor: "not-allowed" } : {}}
               >
                 Book Now
               </button>
@@ -528,7 +641,7 @@ function HomePage() {
               </button>
               <button
                 onClick={() => {
-                  navigate("/signup");
+                  navigate("/dashboard");
                 }}
                 className="w-full text-left bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg font-medium mt-4"
               >

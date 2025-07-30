@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  Calendar,
+  Clock,
+  CheckCircle,
+  XCircle,
+  MessageSquare,
+} from "lucide-react";
 import API_CONFIG from "../../config/apiConfig";
+import FeedbackModal from "../FeedbackModal";
 
 // Helper for base64url decoding (same as HomePage)
 function base64UrlDecode(str: string) {
@@ -9,6 +17,17 @@ function base64UrlDecode(str: string) {
     str += "=";
   }
   return atob(str);
+}
+
+interface AvailabilityData {
+  bikeId: string;
+  date: string;
+  slotStatuses: { [key: string]: string };
+  availableSlots: string[];
+  reservedSlots: string[];
+  totalSlots: number;
+  availableCount: number;
+  reservedCount: number;
 }
 
 const ADMIN_TABS = [
@@ -31,6 +50,22 @@ const AdminDashboard: React.FC = () => {
   const [selectedBike, setSelectedBike] = useState<any>(null);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [bikeToDelete, setBikeToDelete] = useState<string | null>(null);
+
+  // Availability state
+  const [availabilityData, setAvailabilityData] = useState<{
+    [bikeId: string]: AvailabilityData;
+  }>({});
+  const [availabilityLoading, setAvailabilityLoading] = useState<{
+    [bikeId: string]: boolean;
+  }>({});
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [selectedBikeForAvailability, setSelectedBikeForAvailability] =
+    useState<any>(null);
+
+  // Feedback state
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [selectedBikeForFeedback, setSelectedBikeForFeedback] =
+    useState<any>(null);
   const [activeTab, setActiveTab] = useState("home");
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null); // null = loading, false = not admin, true = admin
   const [userName, setUserName] = useState<string | null>(null);
@@ -136,6 +171,97 @@ const AdminDashboard: React.FC = () => {
       setEditBikeLoading(false);
     }
   }, []);
+
+  // Fetch availability for a specific bike
+  const fetchAvailability = useCallback(async (bikeId: string) => {
+    setAvailabilityLoading((prev) => ({ ...prev, [bikeId]: true }));
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+      if (!idToken) {
+        throw new Error("ID token not found. Please log in again.");
+      }
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.BIKES.GET_AVAILABILITY(bikeId)}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: idToken,
+          },
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      const data = await response.json();
+      setAvailabilityData((prev) => ({ ...prev, [bikeId]: data }));
+    } catch (err: any) {
+      console.error(`Failed to fetch availability for ${bikeId}:`, err.message);
+    } finally {
+      setAvailabilityLoading((prev) => ({ ...prev, [bikeId]: false }));
+    }
+  }, []);
+
+  const handleCheckAvailability = (bike: any) => {
+    setSelectedBikeForAvailability(bike);
+    setShowAvailabilityModal(true);
+    // Fetch availability for the selected bike
+    fetchAvailability(bike.bikeId);
+  };
+
+  const handleCloseAvailabilityModal = () => {
+    setShowAvailabilityModal(false);
+    setSelectedBikeForAvailability(null);
+  };
+
+  const handleOpenFeedbackModal = (bike: any) => {
+    setSelectedBikeForFeedback(bike);
+    setShowFeedbackModal(true);
+  };
+
+  const handleCloseFeedbackModal = () => {
+    setShowFeedbackModal(false);
+    setSelectedBikeForFeedback(null);
+  };
+
+  const getAvailabilityStatus = (bikeId: string) => {
+    const data = availabilityData[bikeId];
+    if (!data)
+      return {
+        status: "unknown",
+        text: "Check Availability",
+        color: "text-gray-400",
+      };
+
+    if (data.availableCount > 0) {
+      return {
+        status: "available",
+        text: `${data.availableCount} slots available`,
+        color: "text-green-500",
+      };
+    } else {
+      return {
+        status: "unavailable",
+        text: "Fully booked",
+        color: "text-red-500",
+      };
+    }
+  };
+
+  const formatTime = (time: string) => {
+    return time;
+  };
+
+  const isValidDate = (dateString: string) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    return date instanceof Date && !isNaN(date.getTime());
+  };
 
   useEffect(() => {
     // Use .userData key for admin check
@@ -1524,6 +1650,26 @@ const AdminDashboard: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              handleCheckAvailability(bike);
+                            }}
+                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-all duration-200 transform hover:scale-105 flex items-center space-x-1"
+                          >
+                            <Clock className="h-3 w-3" />
+                            <span>Availability</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenFeedbackModal(bike);
+                            }}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-all duration-200 transform hover:scale-105 flex items-center space-x-1"
+                          >
+                            <MessageSquare className="h-3 w-3" />
+                            <span>Reviews</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleDeleteBike(bike.bikeId);
                             }}
                             className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-all duration-200 transform hover:scale-105"
@@ -1637,6 +1783,26 @@ const AdminDashboard: React.FC = () => {
                             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-all duration-200 transform hover:scale-105"
                           >
                             Update
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCheckAvailability(bike);
+                            }}
+                            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition-all duration-200 transform hover:scale-105 flex items-center space-x-1"
+                          >
+                            <Clock className="h-4 w-4" />
+                            <span>Availability</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenFeedbackModal(bike);
+                            }}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-all duration-200 transform hover:scale-105 flex items-center space-x-1"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            <span>Reviews</span>
                           </button>
                           <button
                             onClick={(e) => {
@@ -1773,6 +1939,132 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Availability Modal */}
+      {showAvailabilityModal && selectedBikeForAvailability && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-green-400">
+                Availability for {selectedBikeForAvailability.bikeId}
+              </h2>
+              <button
+                onClick={handleCloseAvailabilityModal}
+                className="text-gray-400 hover:text-white"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex items-center space-x-4 mb-4">
+                <Clock className="h-5 w-5 text-green-400" />
+                <div className="flex items-center space-x-4">
+                  <span className="text-lg font-semibold text-white">
+                    Daily Availability
+                  </span>
+                </div>
+              </div>
+
+              <img
+                src={
+                  selectedBikeForAvailability.imageUrl ||
+                  "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400"
+                }
+                alt={selectedBikeForAvailability.bikeId}
+                className="w-full h-48 object-cover rounded-lg mb-4"
+              />
+            </div>
+
+            {availabilityLoading[selectedBikeForAvailability.bikeId] ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+                <p className="text-gray-300">Loading availability...</p>
+              </div>
+            ) : (
+              <div>
+                {availabilityData[selectedBikeForAvailability.bikeId] ? (
+                  <div>
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                      <div className="text-center p-4 bg-gray-700 rounded-lg">
+                        <div className="text-2xl font-bold text-green-400">
+                          {
+                            availabilityData[selectedBikeForAvailability.bikeId]
+                              .availableCount
+                          }
+                        </div>
+                        <div className="text-sm text-gray-300">Available</div>
+                      </div>
+                      <div className="text-center p-4 bg-gray-700 rounded-lg">
+                        <div className="text-2xl font-bold text-red-400">
+                          {
+                            availabilityData[selectedBikeForAvailability.bikeId]
+                              .reservedCount
+                          }
+                        </div>
+                        <div className="text-sm text-gray-300">Reserved</div>
+                      </div>
+                      <div className="text-center p-4 bg-gray-700 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-400">
+                          {
+                            availabilityData[selectedBikeForAvailability.bikeId]
+                              .totalSlots
+                          }
+                        </div>
+                        <div className="text-sm text-gray-300">Total</div>
+                      </div>
+                    </div>
+
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold mb-4">Time Slots</h3>
+                      <div className="grid grid-cols-3 gap-2">
+                        {Object.entries(
+                          availabilityData[selectedBikeForAvailability.bikeId]
+                            .slotStatuses
+                        ).map(([time, status]) => (
+                          <div
+                            key={time}
+                            className={`p-3 rounded-lg text-center text-sm font-medium ${
+                              status === "available"
+                                ? "bg-green-600 text-white"
+                                : "bg-red-600 text-white"
+                            }`}
+                          >
+                            {formatTime(time)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex space-x-4">
+                      <button
+                        onClick={handleCloseAvailabilityModal}
+                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-semibold transition-colors"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-300">No availability data found.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {selectedBikeForFeedback && (
+        <FeedbackModal
+          isOpen={showFeedbackModal}
+          onClose={handleCloseFeedbackModal}
+          bike={selectedBikeForFeedback}
+          userType="admin"
+        />
+      )}
     </div>
   );
 };

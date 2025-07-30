@@ -10,15 +10,18 @@ const API_CONFIG = {
     GET_BY_ID: (bikeId) => `/bikes/${bikeId}`,
     UPDATE: (bikeId) => `/bikes/${bikeId}`,
     DELETE: (bikeId) => `/bikes/${bikeId}`,
+    GET_AVAILABILITY: (bikeId) => `/availability/${bikeId}`,
   },
 
-  // Booking endpoints (for future use)
+  // Booking endpoints
   BOOKINGS: {
     GET_ALL: "/bookings",
     GET_BY_ID: (bookingId) => `/bookings/${bookingId}`,
-    CREATE: "/bookings",
+    CREATE: "/booking",
     UPDATE: (bookingId) => `/bookings/${bookingId}`,
     DELETE: (bookingId) => `/bookings/${bookingId}`,
+    GET_USER_BOOKINGS: "/bookings/user",
+    GET_ALL_BOOKINGS_ADMIN: "/bookings/admin",
   },
 
   // User endpoints (for future use)
@@ -26,6 +29,23 @@ const API_CONFIG = {
     GET_ALL: "/users",
     GET_BY_ID: (userId) => `/users/${userId}`,
     UPDATE: (userId) => `/users/${userId}`,
+  },
+
+  // Feedback endpoints
+  FEEDBACK: {
+    POST_FEEDBACK: "/feedback",
+    GET_FEEDBACK_BY_BIKE: (bikeId) => `/feedback/bike/${bikeId}`,
+    GET_FRANCHISE_FEEDBACK: (franchiseId) =>
+      `/feedback/franchise/${franchiseId}`,
+    UPDATE_FEEDBACK: (feedbackId) => `/feedback/${feedbackId}`,
+  },
+
+  // Ticket endpoints
+  TICKETS: {
+    CREATE: "/tickets",
+    GET_ALL_ADMIN: "/tickets/admin",
+    GET_USER_TICKETS: "/tickets/user",
+    GET_BY_ID: (ticketId) => `/tickets/${ticketId}`,
   },
 };
 
