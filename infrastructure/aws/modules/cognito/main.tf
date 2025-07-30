@@ -241,6 +241,9 @@ resource "aws_cognito_user_pool" "dalscooter_user_pool" {
   }
 
   tags = local.common_tags
+  lifecycle {
+    ignore_changes = [schema]
+  }
 }
 
 # Cognito User Pool Client

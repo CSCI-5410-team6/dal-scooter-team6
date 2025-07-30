@@ -53,16 +53,13 @@ module "cognito" {
   bookings_table_arn = module.dynamodb.bookings_table_arn
 }
 
-module "lambda" {
-  source      = "../../modules/lambda"
-  environment = var.environment
-}
-
 module "api_gateway" {
-  source              = "../../modules/api-gateway"
-  region              = "ca-central-1"
-  environment         = var.environment
-  lambda_function_name = "test"
+  source                   = "../../modules/api-gateway"
+  region                   = "ca-central-1"
+  project_name             = var.project_name
+  environment              = var.environment
+  cognito_user_pool_arn    = module.cognito.user_pool_arn
+  sns_topic_arn            = module.sns.sns_topic_arn
 }
 
 variable "environment" {
