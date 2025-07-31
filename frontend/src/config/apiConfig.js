@@ -20,8 +20,8 @@ const API_CONFIG = {
     CREATE: "/booking",
     UPDATE: (bookingId) => `/bookings/${bookingId}`,
     DELETE: (bookingId) => `/bookings/${bookingId}`,
-    GET_USER_BOOKINGS: "/bookings/user",
-    GET_ALL_BOOKINGS_ADMIN: "/bookings/admin",
+    GET_USER_BOOKINGS: "/booking/user",
+    GET_ALL_BOOKINGS_ADMIN: "/booking/admin",
   },
 
   // User endpoints (for future use)
@@ -46,6 +46,11 @@ const API_CONFIG = {
     GET_ALL_ADMIN: "/tickets/admin",
     GET_USER_TICKETS: "/tickets/user",
     GET_BY_ID: (ticketId) => `/tickets/${ticketId}`,
+  },
+
+  // Availability endpoints
+  AVAILABILITY: {
+    UPDATE_AVAILABILITY: (bikeId) => `/availability/${bikeId}`,
   },
 };
 
