@@ -10,16 +10,18 @@ import {
   Calendar,
   Clock,
   Users,
+  MessageSquare,
+  Search,
 } from "lucide-react";
 import Chatbot from "../chatbot/ChatBot";
 import About from "./About";
 import Service from "./Service";
-import FAQ from "./FAQ";
 import Contact from "./Contact";
 import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../contextStore/AuthContext";
 import { Auth } from "aws-amplify";
 import API_CONFIG from "../../config/apiConfig";
+import FeedbackModal from "../FeedbackModal";
 
 interface Bike {
   bikeId: string;
@@ -40,6 +42,76 @@ function HomePage() {
   const [bikes, setBikes] = useState<Bike[]>([]);
   const [bikesLoading, setBikesLoading] = useState(false);
   const [bikesError, setBikesError] = useState("");
+
+  // Pagination state
+  const [currentBikePage, setCurrentBikePage] = useState(1);
+  const [itemsPerPage] = useState(3);
+
+  // Search state
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Bike details modal state
+  const [showBikeDetailsModal, setShowBikeDetailsModal] = useState(false);
+  const [selectedBikeForDetails, setSelectedBikeForDetails] =
+    useState<Bike | null>(null);
+
+  // Reviews and Availability modal state
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [selectedBikeForAction, setSelectedBikeForAction] =
+    useState<Bike | null>(null);
+
+  // Booking state
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingError, setBookingError] = useState("");
+  const [bookingSuccess, setBookingSuccess] = useState("");
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [bookingDetails, setBookingDetails] = useState<any>(null);
+
+  // Availability state
+  const [availabilityData, setAvailabilityData] = useState<any>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
+
+  // Reviews state
+  const [reviewsData, setReviewsData] = useState<any[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState("");
+
+  // Bike ratings state
+  const [bikeRatings, setBikeRatings] = useState<{ [bikeId: string]: number }>(
+    {}
+  );
+  const [bikeReviewCounts, setBikeReviewCounts] = useState<{
+    [bikeId: string]: number;
+  }>({});
+  const [ratingsLoading, setRatingsLoading] = useState<{
+    [bikeId: string]: boolean;
+  }>({});
+
+  // FeedbackModal state
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [selectedBikeForFeedback, setSelectedBikeForFeedback] =
+    useState<any>(null);
+
+  // Complaints state
+  const [showComplaintsModal, setShowComplaintsModal] = useState(false);
+  const [userTickets, setUserTickets] = useState<any[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState("");
+  const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
+  const [createTicketLoading, setCreateTicketLoading] = useState(false);
+  const [createTicketError, setCreateTicketError] = useState("");
+  const [createTicketSuccess, setCreateTicketSuccess] = useState("");
+  const [ticketForm, setTicketForm] = useState({
+    subject: "",
+    description: "",
+    priority: "medium",
+    category: "general",
+    bikeId: "",
+  });
+
   const navigate = useNavigate();
   const { cognitoUser, setCognitoUser } = useAuthContext();
 
@@ -52,16 +124,17 @@ function HomePage() {
     return atob(str);
   }
 
-  // Helper to extract name from idToken in localStorage, and debug info
-  function getUserNameAndDebug() {
+  // Helper to extract name and user type from idToken in localStorage, and debug info
+  function getUserInfoAndDebug() {
     let debug: {
       idTokenKey: string | undefined;
       rawToken?: string | null;
       splitParts?: string[];
       payload: any;
       name: string | null;
+      userType: string | null;
       error?: string;
-    } = { idTokenKey: undefined, payload: null, name: null };
+    } = { idTokenKey: undefined, payload: null, name: null, userType: null };
     try {
       const idTokenKey = Object.keys(localStorage).find((key) =>
         key.includes(".idToken")
@@ -78,6 +151,7 @@ function HomePage() {
               const payload = JSON.parse(base64UrlDecode(parts[1]));
               debug.payload = payload;
               debug.name = payload.name || null;
+              debug.userType = payload["custom:userType"] || null;
             } catch (err: any) {
               debug.error =
                 "base64UrlDecode/JSON.parse error: " +
@@ -97,8 +171,9 @@ function HomePage() {
     }
     return debug;
   }
-  const debugInfo = getUserNameAndDebug();
+  const debugInfo = getUserInfoAndDebug();
   const userName = debugInfo.name;
+  const userType = debugInfo.userType;
 
   // Fetch all bikes
   const fetchBikes = useCallback(async () => {
@@ -135,6 +210,13 @@ function HomePage() {
       const data = await response.json();
       console.log("HomePage: Fetched bikes:", data);
       setBikes(data);
+
+      // Calculate ratings for all bikes
+      if (data && data.length > 0) {
+        data.forEach((bike: Bike) => {
+          calculateBikeRating(bike.bikeId);
+        });
+      }
     } catch (err: any) {
       setBikesError(err.message || "Failed to fetch bikes.");
     } finally {
@@ -163,56 +245,528 @@ function HomePage() {
     navigate("/");
   };
 
-  // Use real bikes from API, fallback to dummy data if API fails
-  const featuredBikes =
-    bikes.length > 0
-      ? bikes.slice(0, 3).map((bike, index) => ({
-          id: index + 1,
-          name: bike.type,
-          image:
-            bike.imageUrl ||
-            "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
-          rating: 4.8,
-          price: `$${bike.hourlyRate}/hour`,
-          features: [
-            `Battery: ${bike.features.batteryLife}`,
-            `Height Adjustable: ${
-              bike.features.heightAdjustable === "true" ? "Yes" : "No"
-            }`,
-            bike.discountCode
-              ? `Discount: ${bike.discountCode}`
-              : "Premium Service",
-          ],
-        }))
-      : [
-          {
-            id: 1,
-            name: "Urban Explorer 2024",
-            image:
-              "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
-            rating: 4.8,
-            price: "$15/hour",
-            features: ["40km Range", "Smart Lock", "GPS Tracking"],
+  // Bike details modal handlers
+  const handleOpenBikeDetailsModal = (bike: Bike) => {
+    setSelectedBikeForDetails(bike);
+    setShowBikeDetailsModal(true);
+    // Calculate rating for this bike if not already calculated
+    if (!bikeRatings[bike.bikeId]) {
+      calculateBikeRating(bike.bikeId);
+    }
+  };
+
+  const handleCloseBikeDetailsModal = () => {
+    setShowBikeDetailsModal(false);
+    setSelectedBikeForDetails(null);
+  };
+
+  // Reviews modal handlers
+  const handleOpenReviewsModal = (bike: Bike) => {
+    setSelectedBikeForAction(bike);
+    setShowReviewsModal(true);
+    setShowBikeDetailsModal(false);
+    fetchReviews(bike.bikeId);
+  };
+
+  const handleCloseReviewsModal = () => {
+    setShowReviewsModal(false);
+    setSelectedBikeForAction(null);
+    setReviewsData([]);
+    setReviewsError("");
+  };
+
+  // FeedbackModal handlers
+  const handleOpenFeedbackModal = (bike: any) => {
+    setSelectedBikeForFeedback(bike);
+    setShowFeedbackModal(true);
+  };
+
+  const handleCloseFeedbackModal = () => {
+    setShowFeedbackModal(false);
+    setSelectedBikeForFeedback(null);
+  };
+
+  // Authentication helper
+  const isUserLoggedIn = () => {
+    const idTokenKey = Object.keys(localStorage).find(
+      (key) =>
+        key.includes("CognitoIdentityServiceProvider") &&
+        key.includes("idToken")
+    );
+    return idTokenKey ? !!localStorage.getItem(idTokenKey) : false;
+  };
+
+  // Complaints handlers
+  const handleOpenComplaintsModal = () => {
+    setShowComplaintsModal(true);
+    fetchUserTickets();
+  };
+
+  const handleCloseComplaintsModal = () => {
+    setShowComplaintsModal(false);
+    setTicketsError("");
+  };
+
+  const handleOpenCreateTicketModal = () => {
+    setShowCreateTicketModal(true);
+    setTicketForm({
+      subject: "",
+      description: "",
+      priority: "medium",
+      category: "general",
+      bikeId: "",
+    });
+  };
+
+  const handleCloseCreateTicketModal = () => {
+    setShowCreateTicketModal(false);
+    setCreateTicketError("");
+    setCreateTicketSuccess("");
+  };
+
+  const handleCreateTicket = () => {
+    if (ticketForm.subject && ticketForm.description) {
+      createTicket(ticketForm);
+    } else {
+      setCreateTicketError("Subject and description are required");
+    }
+  };
+
+  const handleTicketFormChange = (field: string, value: string) => {
+    setTicketForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // Fetch user tickets
+  const fetchUserTickets = useCallback(async () => {
+    if (!isUserLoggedIn()) return;
+
+    setTicketsLoading(true);
+    setTicketsError("");
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+      if (!idToken) {
+        throw new Error("ID token not found. Please log in again.");
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.TICKETS.GET_USER_TICKETS}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: idToken,
           },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Fetched user tickets:", data);
+      setUserTickets(data.tickets || []);
+    } catch (err: any) {
+      console.error("Failed to fetch user tickets:", err.message);
+      setTicketsError(err.message || "Failed to fetch tickets");
+    } finally {
+      setTicketsLoading(false);
+    }
+  }, []);
+
+  // Create ticket
+  const createTicket = useCallback(
+    async (ticketData: any) => {
+      setCreateTicketLoading(true);
+      setCreateTicketError("");
+      setCreateTicketSuccess("");
+      try {
+        const idTokenKey = Object.keys(localStorage).find(
+          (key) =>
+            key.includes("CognitoIdentityServiceProvider") &&
+            key.includes("idToken")
+        );
+        const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+        if (!idToken) {
+          throw new Error("ID token not found. Please log in again.");
+        }
+
+        const response = await fetch(
+          `${API_CONFIG.BASE_URL}${API_CONFIG.TICKETS.CREATE}`,
           {
-            id: 2,
-            name: "Mountain Beast Pro",
-            image:
-              "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
-            rating: 4.9,
-            price: "$20/hour",
-            features: ["60km Range", "All-Terrain", "Quick Charge"],
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: idToken,
+            },
+            body: JSON.stringify(ticketData),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Ticket created:", data);
+        setCreateTicketSuccess("Complaint submitted successfully!");
+
+        // Close modal after a short delay
+        setTimeout(() => {
+          setShowCreateTicketModal(false);
+          setCreateTicketSuccess("");
+          setTicketForm({
+            subject: "",
+            description: "",
+            priority: "medium",
+            category: "general",
+            bikeId: "",
+          });
+        }, 2000);
+
+        // Refresh tickets list
+        fetchUserTickets();
+      } catch (err: any) {
+        console.error("Failed to create ticket:", err.message);
+        setCreateTicketError(err.message || "Failed to submit complaint");
+      } finally {
+        setCreateTicketLoading(false);
+      }
+    },
+    [fetchUserTickets]
+  );
+
+  // Ticket helper functions
+  const getTicketPriorityColor = (priority: string) => {
+    switch (priority.toLowerCase()) {
+      case "high":
+        return "text-red-500";
+      case "medium":
+        return "text-yellow-500";
+      case "low":
+        return "text-green-500";
+      default:
+        return "text-gray-500";
+    }
+  };
+
+  const getTicketStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "open":
+        return "text-red-500";
+      case "in_progress":
+        return "text-yellow-500";
+      case "resolved":
+        return "text-green-500";
+      case "closed":
+        return "text-gray-500";
+      default:
+        return "text-gray-500";
+    }
+  };
+
+  // Fetch reviews
+  const fetchReviews = async (bikeId: string) => {
+    setReviewsLoading(true);
+    setReviewsError("");
+
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (idToken) {
+        headers.Authorization = idToken;
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.FEEDBACK.GET_FEEDBACK_BY_BIKE(
+          bikeId
+        )}`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch reviews: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setReviewsData(data);
+    } catch (err: any) {
+      setReviewsError(err.message || "Failed to fetch reviews");
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  // Calculate average rating for a bike
+  const calculateBikeRating = async (bikeId: string) => {
+    setRatingsLoading((prev) => ({ ...prev, [bikeId]: true }));
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+      // Prepare headers
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      // Add authorization header if user is logged in
+      if (idToken) {
+        headers.Authorization = idToken;
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.FEEDBACK.GET_FEEDBACK_BY_BIKE(
+          bikeId
+        )}`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ratings: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Use the same logic as FeedbackModal
+      if (data && data.feedbacks && data.feedbacks.length > 0) {
+        const averageRating = data.averageRating || 0;
+        const reviewCount = data.feedbacks.length;
+        console.log(
+          `Calculated rating for bike ${bikeId}:`,
+          averageRating,
+          "from",
+          reviewCount,
+          "reviews"
+        );
+        setBikeRatings((prev) => ({ ...prev, [bikeId]: averageRating }));
+        setBikeReviewCounts((prev) => ({ ...prev, [bikeId]: reviewCount }));
+      } else {
+        // No reviews yet, set default rating
+        console.log(`No reviews found for bike ${bikeId}`);
+        setBikeRatings((prev) => ({ ...prev, [bikeId]: 0 }));
+        setBikeReviewCounts((prev) => ({ ...prev, [bikeId]: 0 }));
+      }
+    } catch (err: any) {
+      console.error(
+        `Failed to calculate rating for bike ${bikeId}:`,
+        err.message
+      );
+      // Set default rating on error
+      setBikeRatings((prev) => ({ ...prev, [bikeId]: 0 }));
+    } finally {
+      setRatingsLoading((prev) => ({ ...prev, [bikeId]: false }));
+    }
+  };
+
+  // Availability modal handlers
+  const handleOpenAvailabilityModal = (bike: Bike) => {
+    setSelectedBikeForAction(bike);
+    setShowAvailabilityModal(true);
+    setShowBikeDetailsModal(false);
+    fetchAvailability(bike.bikeId);
+  };
+
+  const handleCloseAvailabilityModal = () => {
+    setShowAvailabilityModal(false);
+    setSelectedBikeForAction(null);
+    setAvailabilityData(null);
+    setAvailabilityError("");
+  };
+
+  // Fetch availability
+  const fetchAvailability = async (bikeId: string) => {
+    setAvailabilityLoading(true);
+    setAvailabilityError("");
+
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (idToken) {
+        headers.Authorization = idToken;
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.BIKES.GET_AVAILABILITY(bikeId)}`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch availability: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setAvailabilityData(data);
+    } catch (err: any) {
+      setAvailabilityError(err.message || "Failed to fetch availability");
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
+  // Book now handler
+  const handleBookNow = (bike: Bike) => {
+    // Check if user is logged in
+    const idTokenKey = Object.keys(localStorage).find(
+      (key) =>
+        key.includes("CognitoIdentityServiceProvider") &&
+        key.includes("idToken")
+    );
+    const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+    if (!idToken) {
+      // Guest user - redirect to login
+      alert("Please log in to book a bike.");
+      navigate("/login");
+      return;
+    }
+
+    setSelectedBikeForAction(bike);
+    setSelectedSlots([]);
+    setShowBookingModal(true);
+    setShowBikeDetailsModal(false);
+    setBookingError("");
+    setBookingSuccess("");
+    setBookingDetails(null);
+    fetchAvailability(bike.bikeId);
+  };
+
+  // Booking handlers
+  const handleCloseBookingModal = () => {
+    setShowBookingModal(false);
+    setSelectedSlots([]);
+    setBookingError("");
+    setBookingSuccess("");
+    setBookingDetails(null);
+  };
+
+  const handleConfirmBooking = async () => {
+    if (!selectedBikeForAction || selectedSlots.length === 0) {
+      setBookingError("Please select at least one time slot");
+      return;
+    }
+
+    setBookingLoading(true);
+    setBookingError("");
+    setBookingSuccess("");
+
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+      if (!idToken) {
+        throw new Error("ID token not found. Please log in again.");
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.BOOKINGS.CREATE}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: idToken,
           },
-          {
-            id: 3,
-            name: "City Cruiser Deluxe",
-            image:
-              "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400",
-            rating: 4.7,
-            price: "$12/hour",
-            features: ["35km Range", "Comfort Seat", "LED Lights"],
-          },
-        ];
+          body: JSON.stringify({
+            bikeId: selectedBikeForAction.bikeId,
+            bookingDate: new Date().toISOString().split("T")[0], // YYYY-MM-DD format
+            slotTimes: selectedSlots, // Array of slot times
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          throw new Error(
+            "One or more time slots are already reserved. Please choose different times."
+          );
+        }
+        throw new Error(data.error || `Booking failed: ${response.status}`);
+      }
+
+      setBookingSuccess(
+        `Successfully created ${data.totalBookings} booking(s)!`
+      );
+      setBookingDetails(data.bookings);
+
+      // Close modal after 3 seconds
+      setTimeout(() => {
+        setShowBookingModal(false);
+        setBookingSuccess("");
+        setBookingDetails(null);
+        setSelectedSlots([]); // Reset selected slots
+      }, 3000);
+    } catch (err: any) {
+      setBookingError(err.message || "Failed to create bookings");
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  // Search functionality
+  const filteredBikes = bikes.filter((bike) => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      bike.bikeId.toLowerCase().includes(searchLower) ||
+      bike.type.toLowerCase().includes(searchLower) ||
+      bike.features.batteryLife.toLowerCase().includes(searchLower) ||
+      bike.hourlyRate.toString().includes(searchLower)
+    );
+  });
+
+  // Calculate pagination for filtered bikes
+  const indexOfLastBike = currentBikePage * itemsPerPage;
+  const indexOfFirstBike = indexOfLastBike - itemsPerPage;
+  const currentBikes = filteredBikes.slice(indexOfFirstBike, indexOfLastBike);
+  const totalPages = Math.ceil(filteredBikes.length / itemsPerPage);
+
+  const handlePageChange = (page: number) => {
+    setCurrentBikePage(page);
+  };
 
   const renderPage = () => {
     switch (currentPage) {
@@ -220,8 +774,118 @@ function HomePage() {
         return <About />;
       case "service":
         return <Service />;
-      case "faq":
-        return <FAQ />;
+      case "complaints":
+        return (
+          <div className="min-h-screen bg-gray-900 text-white py-20">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-12">
+                <h1 className="text-4xl font-bold text-green-400 mb-4">
+                  Complaints & Support
+                </h1>
+                <p className="text-gray-300 text-lg">
+                  We're here to help. Submit your complaints or get support.
+                </p>
+              </div>
+
+              {isUserLoggedIn() ? (
+                <div className="bg-gray-800 rounded-lg p-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-semibold text-white">
+                      My Complaints
+                    </h2>
+                    <button
+                      onClick={handleOpenCreateTicketModal}
+                      className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      <span>Submit New Complaint</span>
+                    </button>
+                  </div>
+
+                  {ticketsLoading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+                      <p className="text-gray-300">Loading complaints...</p>
+                    </div>
+                  ) : ticketsError ? (
+                    <div className="text-center py-8">
+                      <p className="text-red-400 mb-4">{ticketsError}</p>
+                      <button
+                        onClick={fetchUserTickets}
+                        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : userTickets && userTickets.length > 0 ? (
+                    <div className="space-y-4">
+                      {userTickets.map((ticket: any, index: number) => (
+                        <div key={index} className="bg-gray-700 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-lg font-semibold text-white">
+                              {ticket.subject}
+                            </h3>
+                            <span
+                              className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                ticket.status === "open"
+                                  ? "bg-red-500 text-white"
+                                  : ticket.status === "in_progress"
+                                  ? "bg-yellow-500 text-white"
+                                  : ticket.status === "resolved"
+                                  ? "bg-green-500 text-white"
+                                  : "bg-gray-500 text-white"
+                              }`}
+                            >
+                              {ticket.status}
+                            </span>
+                          </div>
+                          <p className="text-gray-300 mb-2">
+                            {ticket.description}
+                          </p>
+                          <div className="flex items-center justify-between text-sm text-gray-400">
+                            <span>Priority: {ticket.priority}</span>
+                            <span>
+                              Created:{" "}
+                              {new Date(ticket.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <MessageSquare className="h-16 w-16 text-green-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-white mb-2">
+                        No complaints found
+                      </h3>
+                      <p className="text-gray-300">
+                        You haven't submitted any complaints yet.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-gray-800 rounded-lg p-8">
+                  <div className="text-center">
+                    <MessageSquare className="h-16 w-16 text-green-400 mx-auto mb-4" />
+                    <h2 className="text-2xl font-semibold mb-4">
+                      Submit a Complaint
+                    </h2>
+                    <p className="text-gray-300 mb-6">
+                      Please login to submit complaints and get support.
+                    </p>
+                    <button
+                      onClick={() => navigate("/login")}
+                      className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                    >
+                      Login to Submit Complaint
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
       case "contact":
         return <Contact />;
       default:
@@ -251,7 +915,11 @@ function HomePage() {
 
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
-                  onClick={() => navigate("/dashboard")}
+                  onClick={() => {
+                    const bikesSection =
+                      document.getElementById("available-bikes");
+                    bikesSection?.scrollIntoView({ behavior: "smooth" });
+                  }}
                   className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 flex items-center justify-center group"
                 >
                   GET BIKE
@@ -270,7 +938,21 @@ function HomePage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Star className="h-5 w-5 text-yellow-400" />
-                  <span className="text-sm text-gray-300">4.8 Rating</span>
+                  <span className="text-sm text-gray-300">
+                    {bikes.length > 0
+                      ? (() => {
+                          const totalRating = Object.values(bikeRatings).reduce(
+                            (sum, rating) => sum + rating,
+                            0
+                          );
+                          const averageRating =
+                            totalRating / Object.keys(bikeRatings).length;
+                          return averageRating > 0
+                            ? `${averageRating.toFixed(1)} Rating`
+                            : "4.8 Rating";
+                        })()
+                      : "4.8 Rating"}
+                  </span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Clock className="h-5 w-5 text-blue-400" />
@@ -293,17 +975,40 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Featured Bikes Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-800/50">
+      {/* All Available Bikes Section */}
+      <section
+        id="available-bikes"
+        className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-800/50"
+      >
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Featured E-Bikes
-            </h2>
-            <p className="text-gray-300 text-lg max-w-2xl mx-auto">
-              Choose from our premium selection of electric bikes, each designed
-              for different adventures and lifestyles.
-            </p>
+          <div className="flex justify-between items-center mb-12">
+            <div className="text-left">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                Available E-Bikes
+              </h2>
+              <p className="text-gray-300 text-lg max-w-2xl">
+                Choose from our premium selection of electric bikes, each
+                designed for different adventures and lifestyles.
+              </p>
+            </div>
+            {/* Search Bar */}
+            {bikes.length > 0 && (
+              <div className="w-80">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search bikes..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentBikePage(1); // Reset to first page when searching
+                    }}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {bikesLoading ? (
@@ -321,58 +1026,127 @@ function HomePage() {
                 Retry
               </button>
             </div>
+          ) : bikes.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-300 mb-4">
+                No bikes available at the moment.
+              </p>
+              <button
+                onClick={fetchBikes}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
+              >
+                Refresh
+              </button>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {featuredBikes.map((bike) => (
-                <div
-                  key={bike.id}
-                  className="bg-gray-800 rounded-xl overflow-hidden hover:bg-gray-750 transition-all duration-300 transform hover:scale-105 border border-gray-700"
-                >
-                  <div className="relative">
-                    <img
-                      src={bike.image}
-                      alt={bike.name}
-                      className="w-full h-48 object-cover"
-                    />
-                    <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                      {bike.price}
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xl font-semibold">{bike.name}</h3>
-                      <div className="flex items-center space-x-1">
-                        <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                        <span className="text-sm text-gray-300">
-                          {bike.rating}
-                        </span>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {currentBikes.map((bike) => (
+                  <div
+                    key={bike.bikeId}
+                    className="bg-gray-800 rounded-xl overflow-hidden hover:bg-gray-750 transition-all duration-300 transform hover:scale-105 border border-gray-700"
+                  >
+                    <div className="relative">
+                      <img
+                        src={
+                          bike.imageUrl ||
+                          "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400"
+                        }
+                        alt={bike.type}
+                        className="w-full h-48 object-cover"
+                      />
+                      <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                        ${bike.hourlyRate}/hour
                       </div>
+                      {bike.discountCode && (
+                        <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                          {bike.discountCode}
+                        </div>
+                      )}
                     </div>
-                    <div className="space-y-2 mb-4">
-                      {bike.features.map((feature, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center space-x-2"
-                        >
-                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xl font-semibold">{bike.type}</h3>
+                        <div className="flex items-center space-x-1">
+                          <Star className="h-4 w-4 text-yellow-400 fill-current" />
                           <span className="text-sm text-gray-300">
-                            {feature}
+                            {ratingsLoading[bike.bikeId] ? (
+                              <div className="animate-spin rounded-full h-3 w-3 border-b border-yellow-400"></div>
+                            ) : bikeRatings[bike.bikeId] ? (
+                              `${bikeRatings[bike.bikeId].toFixed(1)} (${
+                                bikeReviewCounts[bike.bikeId] || 0
+                              } reviews)`
+                            ) : (
+                              "No reviews"
+                            )}
                           </span>
                         </div>
-                      ))}
+                      </div>
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                          <span className="text-sm text-gray-300">
+                            Battery: {bike.features.batteryLife}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                          <span className="text-sm text-gray-300">
+                            Height Adjustable:{" "}
+                            {bike.features.heightAdjustable === "true"
+                              ? "Yes"
+                              : "No"}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleOpenBikeDetailsModal(bike)}
+                        className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors"
+                      >
+                        View Details
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        navigate("/dashboard");
-                      }}
-                      className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors"
-                    >
-                      Book Now
-                    </button>
                   </div>
+                ))}
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center space-x-2 mt-8">
+                  <button
+                    onClick={() => handlePageChange(currentBikePage - 1)}
+                    disabled={currentBikePage === 1}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  >
+                    Previous
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                    (page) => (
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`px-3 py-2 rounded-lg transition-colors ${
+                          currentBikePage === page
+                            ? "bg-green-500 text-white"
+                            : "bg-gray-700 hover:bg-gray-600 text-white"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    )
+                  )}
+
+                  <button
+                    onClick={() => handlePageChange(currentBikePage + 1)}
+                    disabled={currentBikePage === totalPages}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  >
+                    Next
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       </section>
@@ -506,14 +1280,14 @@ function HomePage() {
                     Services
                   </button>
                   <button
-                    onClick={() => setCurrentPage("faq")}
+                    onClick={() => setCurrentPage("complaints")}
                     className={`px-3 py-2 text-sm font-medium transition-colors ${
-                      currentPage === "faq"
+                      currentPage === "complaints"
                         ? "text-white"
                         : "text-gray-300 hover:text-green-400"
                     }`}
                   >
-                    FAQ
+                    Complaints
                   </button>
                   <button
                     onClick={() => setCurrentPage("contact")}
@@ -529,23 +1303,19 @@ function HomePage() {
               </div>
             </div>
             <div className="hidden md:flex items-center space-x-4">
-              <button
-                onClick={() => {
-                  if (!userName) {
-                    navigate("/login");
-                  } else {
-                    navigate("/dashboard");
-                  }
-                }}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                Book Now
-              </button>
               {userName && (
                 <>
                   <span className="ml-4 font-semibold text-green-400">
                     Welcome, {userName}!
                   </span>
+                  {userType === "customer" && (
+                    <button
+                      onClick={() => navigate("/my-bookings")}
+                      className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      My Bookings
+                    </button>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="ml-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold shadow transition-colors"
@@ -553,6 +1323,14 @@ function HomePage() {
                     Log Out
                   </button>
                 </>
+              )}
+              {!userName && (
+                <button
+                  onClick={() => navigate("/login")}
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Login
+                </button>
               )}
             </div>
             <div className="md:hidden">
@@ -615,16 +1393,16 @@ function HomePage() {
               </button>
               <button
                 onClick={() => {
-                  setCurrentPage("faq");
+                  setCurrentPage("complaints");
                   setIsMenuOpen(false);
                 }}
                 className={`block px-3 py-2 text-base font-medium w-full text-left ${
-                  currentPage === "faq"
+                  currentPage === "complaints"
                     ? "text-white"
                     : "text-gray-300 hover:text-white"
                 }`}
               >
-                FAQ
+                Complaints
               </button>
               <button
                 onClick={() => {
@@ -639,14 +1417,26 @@ function HomePage() {
               >
                 Contact
               </button>
-              <button
-                onClick={() => {
-                  navigate("/dashboard");
-                }}
-                className="w-full text-left bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg font-medium mt-4"
-              >
-                Book Now
-              </button>
+              {userName && userType === "customer" && (
+                <button
+                  onClick={() => {
+                    navigate("/my-bookings");
+                  }}
+                  className="w-full text-left bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg font-medium mt-4"
+                >
+                  My Bookings
+                </button>
+              )}
+              {!userName && (
+                <button
+                  onClick={() => {
+                    navigate("/login");
+                  }}
+                  className="w-full text-left bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg font-medium mt-4"
+                >
+                  Login
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -654,6 +1444,558 @@ function HomePage() {
 
       {/* Page Content */}
       {renderPage()}
+
+      {/* Bike Details Modal */}
+      {showBikeDetailsModal && selectedBikeForDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-green-400">
+                {selectedBikeForDetails.type} - Details
+              </h2>
+              <button
+                onClick={handleCloseBikeDetailsModal}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Bike Image */}
+              <div>
+                <img
+                  src={
+                    selectedBikeForDetails.imageUrl ||
+                    "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400"
+                  }
+                  alt={selectedBikeForDetails.type}
+                  className="w-full h-64 object-cover rounded-lg"
+                />
+              </div>
+
+              {/* Bike Information */}
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    {selectedBikeForDetails.type}
+                  </h3>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Star className="h-5 w-5 text-yellow-400 fill-current" />
+                    <span className="text-gray-300">
+                      {ratingsLoading[selectedBikeForDetails.bikeId] ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b border-yellow-400"></div>
+                      ) : bikeRatings[selectedBikeForDetails.bikeId] ? (
+                        `${bikeRatings[selectedBikeForDetails.bikeId].toFixed(
+                          1
+                        )} Rating (${
+                          bikeReviewCounts[selectedBikeForDetails.bikeId] || 0
+                        } reviews)`
+                      ) : (
+                        "No reviews"
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Hourly Rate:</span>
+                    <span className="text-green-400 font-semibold text-lg">
+                      ${selectedBikeForDetails.hourlyRate}/hour
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Battery Life:</span>
+                    <span className="text-white">
+                      {selectedBikeForDetails.features.batteryLife}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Height Adjustable:</span>
+                    <span className="text-white">
+                      {selectedBikeForDetails.features.heightAdjustable ===
+                      "true"
+                        ? "Yes"
+                        : "No"}
+                    </span>
+                  </div>
+
+                  {selectedBikeForDetails.discountCode && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-300">Discount Code:</span>
+                      <span className="text-red-400 font-semibold">
+                        {selectedBikeForDetails.discountCode}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Bike ID:</span>
+                    <span className="text-blue-400 font-mono">
+                      {selectedBikeForDetails.bikeId}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-700">
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleBookNow(selectedBikeForDetails)}
+                      className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <span>Book Now</span>
+                    </button>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() =>
+                          handleOpenFeedbackModal(selectedBikeForDetails)
+                        }
+                        className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        <span>Reviews</span>
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleOpenAvailabilityModal(selectedBikeForDetails)
+                        }
+                        className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2"
+                      >
+                        <Clock className="h-4 w-4" />
+                        <span>Check Availability</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Availability Modal */}
+      {showAvailabilityModal && selectedBikeForAction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-green-400">
+                Availability for {selectedBikeForAction.type}
+              </h2>
+              <button
+                onClick={handleCloseAvailabilityModal}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {availabilityLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+                  <p className="text-gray-300">Loading availability...</p>
+                </div>
+              ) : availabilityError ? (
+                <div className="text-center py-8">
+                  <p className="text-red-400 mb-4">{availabilityError}</p>
+                  <button
+                    onClick={() =>
+                      fetchAvailability(selectedBikeForAction.bikeId)
+                    }
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : availabilityData ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="text-center p-4 bg-gray-700 rounded-lg">
+                      <div className="text-2xl font-bold text-green-400">
+                        {availabilityData.availableCount || 0}
+                      </div>
+                      <div className="text-sm text-gray-300">Available</div>
+                    </div>
+                    <div className="text-center p-4 bg-gray-700 rounded-lg">
+                      <div className="text-2xl font-bold text-red-400">
+                        {availabilityData.reservedCount || 0}
+                      </div>
+                      <div className="text-sm text-gray-300">Reserved</div>
+                    </div>
+                    <div className="text-center p-4 bg-gray-700 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-400">
+                        {availabilityData.totalSlots || 0}
+                      </div>
+                      <div className="text-sm text-gray-300">Total Slots</div>
+                    </div>
+                  </div>
+
+                  {availabilityData.availableSlots &&
+                  availabilityData.availableSlots.length > 0 ? (
+                    <div>
+                      <h3 className="text-lg font-semibold text-white mb-3">
+                        Available Time Slots
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {availabilityData.availableSlots.map(
+                          (slot: string, index: number) => (
+                            <div
+                              key={index}
+                              className="bg-green-900/30 border border-green-500 rounded-lg p-3 text-center"
+                            >
+                              <span className="text-green-400 font-medium">
+                                {slot}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-gray-300">
+                        No available slots for today
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Book Now Button */}
+                  <div className="pt-4 border-t border-gray-700">
+                    <button
+                      onClick={() => {
+                        setShowAvailabilityModal(false);
+                        setShowBookingModal(true);
+                        setSelectedBikeForAction(selectedBikeForAction);
+                        setSelectedSlots([]); // Reset selected slots
+                        setBookingError("");
+                        setBookingSuccess("");
+                        setBookingDetails(null);
+                      }}
+                      className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors"
+                    >
+                      Book This Bike
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-300">No availability data found</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Modal */}
+      {showBookingModal && selectedBikeForAction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-green-400">
+                Book {selectedBikeForAction.type}
+              </h2>
+              <button
+                onClick={handleCloseBookingModal}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {availabilityLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+                  <p className="text-gray-300">Loading available slots...</p>
+                </div>
+              ) : availabilityError ? (
+                <div className="text-center py-8">
+                  <p className="text-red-400 mb-4">{availabilityError}</p>
+                  <button
+                    onClick={() =>
+                      fetchAvailability(selectedBikeForAction.bikeId)
+                    }
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : availabilityData &&
+                availabilityData.availableSlots &&
+                availabilityData.availableSlots.length > 0 ? (
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-4">
+                    Select Time Slots (Multiple Selection)
+                  </h3>
+                  {selectedSlots.length > 0 && (
+                    <div className="mb-4 p-3 bg-green-900/30 border border-green-500 rounded-lg">
+                      <p className="text-green-400 text-sm">
+                        Selected: {selectedSlots.join(", ")}
+                      </p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    {availabilityData.availableSlots.map(
+                      (slot: string, index: number) => (
+                        <div key={index} className="space-y-2">
+                          <button
+                            onClick={() => {
+                              if (selectedSlots.includes(slot)) {
+                                setSelectedSlots(
+                                  selectedSlots.filter((s) => s !== slot)
+                                );
+                              } else {
+                                setSelectedSlots([...selectedSlots, slot]);
+                              }
+                            }}
+                            className={`w-full p-4 rounded-lg border-2 transition-colors ${
+                              selectedSlots.includes(slot)
+                                ? "border-green-500 bg-green-900/30 text-green-400"
+                                : "border-gray-600 bg-gray-700 text-white hover:border-green-400"
+                            }`}
+                          >
+                            <span className="font-medium">{slot}</span>
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-300">No available slots for today</p>
+                </div>
+              )}
+
+              {/* Error/Success Messages */}
+              {bookingError && (
+                <div className="bg-red-900/50 border border-red-500 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <svg
+                      className="w-5 h-5 text-red-400"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-red-400 font-medium">
+                      Error: {bookingError}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {bookingSuccess && (
+                <div className="bg-green-900/50 border border-green-500 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <svg
+                      className="w-5 h-5 text-green-400"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-green-400 font-medium">
+                      {bookingSuccess}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex space-x-4 pt-4">
+                <button
+                  onClick={handleConfirmBooking}
+                  disabled={bookingLoading || selectedSlots.length === 0}
+                  className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none"
+                >
+                  {bookingLoading
+                    ? "Creating Bookings..."
+                    : `Confirm ${selectedSlots.length} Booking${
+                        selectedSlots.length !== 1 ? "s" : ""
+                      }`}
+                </button>
+                <button
+                  onClick={handleCloseBookingModal}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FeedbackModal */}
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={handleCloseFeedbackModal}
+        bike={selectedBikeForFeedback}
+        userType={isUserLoggedIn() ? "customer" : null}
+      />
+
+      {/* Create Ticket Modal */}
+      {showCreateTicketModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-green-400">
+                Submit New Complaint
+              </h2>
+              <button
+                onClick={handleCloseCreateTicketModal}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Subject */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Subject *
+                </label>
+                <input
+                  type="text"
+                  value={ticketForm.subject}
+                  onChange={(e) =>
+                    handleTicketFormChange("subject", e.target.value)
+                  }
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500"
+                  placeholder="Enter complaint subject"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Description *
+                </label>
+                <textarea
+                  value={ticketForm.description}
+                  onChange={(e) =>
+                    handleTicketFormChange("description", e.target.value)
+                  }
+                  rows={4}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500"
+                  placeholder="Describe your complaint in detail"
+                />
+              </div>
+
+              {/* Priority */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Priority
+                </label>
+                <select
+                  value={ticketForm.priority}
+                  onChange={(e) =>
+                    handleTicketFormChange("priority", e.target.value)
+                  }
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Category
+                </label>
+                <select
+                  value={ticketForm.category}
+                  onChange={(e) =>
+                    handleTicketFormChange("category", e.target.value)
+                  }
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+                >
+                  <option value="general">General</option>
+                  <option value="technical">Technical</option>
+                  <option value="billing">Billing</option>
+                  <option value="service">Service</option>
+                </select>
+              </div>
+
+              {/* Error/Success Messages */}
+              {createTicketError && (
+                <div className="bg-red-900/50 border border-red-500 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <svg
+                      className="w-5 h-5 text-red-400"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-red-400 font-medium">
+                      Error: {createTicketError}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {createTicketSuccess && (
+                <div className="bg-green-900/50 border border-green-500 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <svg
+                      className="w-5 h-5 text-green-400"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-green-400 font-medium">
+                      {createTicketSuccess}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex space-x-4 pt-4">
+                <button
+                  onClick={handleCreateTicket}
+                  disabled={createTicketLoading}
+                  className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none"
+                >
+                  {createTicketLoading ? "Submitting..." : "Submit Complaint"}
+                </button>
+                <button
+                  onClick={handleCloseCreateTicketModal}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chatbot */}
       <Chatbot />
