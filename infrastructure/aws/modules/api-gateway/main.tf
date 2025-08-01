@@ -108,7 +108,15 @@ resource "aws_iam_policy" "lambda_policy" {
         ]
         Resource = [
           data.aws_dynamodb_table.bikes_table.arn,
+          "${data.aws_dynamodb_table.bikes_table.arn}/index/*",
           data.aws_dynamodb_table.bookings_table.arn,
+          "${data.aws_dynamodb_table.bookings_table.arn}/index/*",
+          data.aws_dynamodb_table.feedback_table.arn,
+          "${data.aws_dynamodb_table.feedback_table.arn}/index/*",
+          data.aws_dynamodb_table.tickets_table.arn,
+          "${data.aws_dynamodb_table.tickets_table.arn}/index/*",
+          data.aws_dynamodb_table.availability_table.arn,
+          "${data.aws_dynamodb_table.availability_table.arn}/index/*"
         ]
       },
       {
@@ -121,7 +129,9 @@ resource "aws_iam_policy" "lambda_policy" {
       {
         Effect = "Allow"
         Action = [
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:GetObject"
         ]
         Resource = [
           "arn:aws:s3:::dalscooter-bike-images-${var.environment}/*"
@@ -147,28 +157,29 @@ locals {
 # Lambda Functions for Bike Management
 # ===========================
 resource "aws_lambda_function" "create-bike" {
-  filename      = "../../../../backend/lambda_functions/create_bike.py.zip"
+  filename      = "../../../../backend/lambda_functions/bikes/create_bike.py.zip"
   function_name = "create-bike-${var.environment}"
   role          = aws_iam_role.lambda_execution_role.arn
   handler       = "create_bike.lambda_handler"
   runtime       = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/create_bike.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bikes/create_bike.py.zip")
   environment {
     variables = {
       BIKES_TABLE = "bikes-table-${var.environment}"
       BIKE_IMAGES_BUCKET = aws_s3_bucket.bike_images.bucket
+      AVAILABILITY_TABLE = "${var.environment}-availability-table"
     }
   }
   tags = local.common_tags
 }
 
 resource "aws_lambda_function" "update-bike" {
-  filename      = "../../../../backend/lambda_functions/update_bike.py.zip"
+  filename      = "../../../../backend/lambda_functions/bikes/update_bike.py.zip"
   function_name = "update-bike-${var.environment}"
   role          = aws_iam_role.lambda_execution_role.arn
   handler       = "update_bike.lambda_handler"
   runtime       = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/update_bike.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bikes/update_bike.py.zip")
   environment {
     variables = {
       BIKES_TABLE = "bikes-table-${var.environment}"
@@ -179,12 +190,12 @@ resource "aws_lambda_function" "update-bike" {
 }
 
 resource "aws_lambda_function" "get-bike" {
-  filename         = "../../../../backend/lambda_functions/get_bike.py.zip"
+  filename         = "../../../../backend/lambda_functions/bikes/get_bike.py.zip"
   function_name    = "get-bike-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_bike.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_bike.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bikes/get_bike.py.zip")
   environment {
     variables = {
       BIKES_TABLE = "bikes-table-${var.environment}"
@@ -194,12 +205,12 @@ resource "aws_lambda_function" "get-bike" {
 }
 
 resource "aws_lambda_function" "get-all-bikes" {
-  filename         = "../../../../backend/lambda_functions/get_all_bikes.py.zip"
+  filename         = "../../../../backend/lambda_functions/bikes/get_all_bikes.py.zip"
   function_name    = "get-all-bikes-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_all_bikes.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_all_bikes.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bikes/get_all_bikes.py.zip")
   environment {
     variables = {
       BIKES_TABLE = "bikes-table-${var.environment}"
@@ -208,12 +219,12 @@ resource "aws_lambda_function" "get-all-bikes" {
   tags = local.common_tags
 }
 resource "aws_lambda_function" "delete-bike" {
-  filename         = "../../../../backend/lambda_functions/delete_bike.py.zip"
+  filename         = "../../../../backend/lambda_functions/bikes/delete_bike.py.zip"
   function_name    = "delete-bike-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "delete_bike.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/delete_bike.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bikes/delete_bike.py.zip")
   environment {
     variables = {
       BIKES_TABLE = "bikes-table-${var.environment}"
@@ -224,30 +235,30 @@ resource "aws_lambda_function" "delete-bike" {
 
 # Lambda Functions for Booking/Availability
 resource "aws_lambda_function" "get-availability" {
-  filename         = "../../../../backend/lambda_functions/get_availability.py.zip"
+  filename         = "../../../../backend/lambda_functions/availability/get_availability.py.zip"
   function_name    = "getAvailabilityLambda-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_availability.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_availability.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/availability/get_availability.py.zip")
   environment {
     variables = {
       BOOKINGS_TABLE = "bookings-table-${var.environment}",
-      AVAILABILITY_TABLE = "availability-table-${var.environment}"
+      AVAILABILITY_TABLE = "${var.environment}-availability-table"
     }
   }
   tags = local.common_tags
 }
 resource "aws_lambda_function" "update-availability" {
-  filename         = "../../../../backend/lambda_functions/update_availability.py.zip"
+  filename         = "../../../../backend/lambda_functions/availability/update_availability.py.zip"
   function_name    = "update-availability-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "update_availability.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/update_availability.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/availability/update_availability.py.zip")
   environment {
     variables = {
-      AVAILABILITY_TABLE = "availability-table-${var.environment}"
+      AVAILABILITY_TABLE = "${var.environment}-availability-table"
     }
   }
   tags = local.common_tags
@@ -256,12 +267,12 @@ resource "aws_lambda_function" "update-availability" {
 # Lambda Functions for Booking Bike
 
 resource "aws_lambda_function" "create-booking" {
-  filename         = "../../../../backend/lambda_functions/create_booking.py.zip"
+  filename         = "../../../../backend/lambda_functions/bookings/create_booking.py.zip"
   function_name    = "createBookingLambda-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "create_booking.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/create_booking.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bookings/create_booking.py.zip")
   environment {
     variables = {
       BOOKINGS_TABLE = "bookings-table-${var.environment}"
@@ -272,12 +283,12 @@ resource "aws_lambda_function" "create-booking" {
 }
 
 resource "aws_lambda_function" "get-booking" {
-  filename         = "../../../../backend/lambda_functions/get_booking.py.zip"
+  filename         = "../../../../backend/lambda_functions/bookings/get_booking.py.zip"
   function_name    = "getBookingLambda-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_booking.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_booking.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bookings/get_booking.py.zip")
   environment {
     variables = {
       BOOKINGS_TABLE = "bookings-table-${var.environment}"
@@ -287,12 +298,12 @@ resource "aws_lambda_function" "get-booking" {
 }
 
 resource "aws_lambda_function" "get-all-bookings" {
-  filename         = "../../../../backend/lambda_functions/get_all_bookings.py.zip"
+  filename         = "../../../../backend/lambda_functions/bookings/get_all_bookings.py.zip"
   function_name    = "get-all-bookings-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_all_bookings.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_all_bookings.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bookings/get_all_bookings.py.zip")
   environment {
     variables = {
       BOOKINGS_TABLE = "bookings-table-${var.environment}"
@@ -302,14 +313,15 @@ resource "aws_lambda_function" "get-all-bookings" {
 }
 
 resource "aws_lambda_function" "get-user-bookings" {
-  filename         = "../../../../backend/lambda_functions/get_user_bookings.py.zip"
+  filename         = "../../../../backend/lambda_functions/bookings/get_user_bookings.py.zip"
   function_name    = "get-user-bookings-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_user_bookings.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_user_bookings.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bookings/get_user_bookings.py.zip")
   environment {
     variables = {
+      BOOKINGS_TABLE = "bookings-table-${var.environment}",
       BIKES_TABLE = "bikes-table-${var.environment}",
     }
   }
@@ -318,12 +330,12 @@ resource "aws_lambda_function" "get-user-bookings" {
 
 # Lambda Functions for feedback
 resource "aws_lambda_function" "submit-feedback" {
-  filename         = "../../../../backend/lambda_functions/submit_feedback.py.zip"
+  filename         = "../../../../backend/lambda_functions/feedback/submit_feedback.py.zip"
   function_name    = "submitFeedbackLambda-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "submit_feedback.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/submit_feedback.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/feedback/submit_feedback.py.zip")
   environment {
     variables = {
       BIKES_TABLE = "bikes-table-${var.environment}",
@@ -334,12 +346,12 @@ resource "aws_lambda_function" "submit-feedback" {
 }
 
 resource "aws_lambda_function" "get-bike-feedback" {
-  filename         = "../../../../backend/lambda_functions/get_feedback_by_bike.py.zip"
+  filename         = "../../../../backend/lambda_functions/feedback/get_feedback_by_bike.py.zip"
   function_name    = "getBikeFeedbackLambda-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_feedback_by_bike.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_feedback_by_bike.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/feedback/get_feedback_by_bike.py.zip")
   environment {
     variables = {
       FEEDBACK_TABLE = "feedback-table-${var.environment}",
@@ -349,12 +361,12 @@ resource "aws_lambda_function" "get-bike-feedback" {
 }
 
 resource "aws_lambda_function" "get-franchise-feedback" {
-  filename         = "../../../../backend/lambda_functions/get_franchise_feedback.py.zip"
+  filename         = "../../../../backend/lambda_functions/feedback/get_franchise_feedback.py.zip"
   function_name    = "getFranchiseFeedbackLambda-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_franchise_feedback.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_franchise_feedback.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/feedback/get_franchise_feedback.py.zip")
   environment {
     variables = {
       FEEDBACK_TABLE = "feedback-table-${var.environment}",
@@ -364,12 +376,12 @@ resource "aws_lambda_function" "get-franchise-feedback" {
 }
 
 resource "aws_lambda_function" "update-feedback" {
-  filename         = "../../../../backend/lambda_functions/update_feedback.py.zip"
+  filename         = "../../../../backend/lambda_functions/feedback/update_feedback.py.zip"
   function_name    = "update-feedback-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "update_feedback.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/update_feedback.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/feedback/update_feedback.py.zip")
   environment {
     variables = {
       FEEDBACK_TABLE = "feedback-table-${var.environment}",
@@ -380,12 +392,12 @@ resource "aws_lambda_function" "update-feedback" {
 
 # Lambda Functions for Ticket Management
 resource "aws_lambda_function" "create-ticket" {
-  filename         = "../../../../backend/lambda_functions/create_ticket.py.zip"
+  filename         = "../../../../backend/lambda_functions/tickets/create_ticket.py.zip"
   function_name    = "create-ticket-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "create_ticket.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/create_ticket.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/create_ticket.py.zip")
   environment {
     variables = {
       TICKET_TABLE = "ticket-table-${var.environment}",
@@ -395,12 +407,12 @@ resource "aws_lambda_function" "create-ticket" {
 }
 
 resource "aws_lambda_function" "get-all-tickets" {
-  filename         = "../../../../backend/lambda_functions/get_all_tickets.py.zip"
+  filename         = "../../../../backend/lambda_functions/tickets/get_all_tickets.py.zip"
   function_name    = "get-all-tickets-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_all_tickets.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_all_tickets.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/get_all_tickets.py.zip")
   environment {
     variables = {
       TICKET_TABLE = "ticket-table-${var.environment}",
@@ -410,12 +422,12 @@ resource "aws_lambda_function" "get-all-tickets" {
 }
 
 resource "aws_lambda_function" "get-user-tickets" {
-  filename         = "../../../../backend/lambda_functions/get_user_tickets.py.zip"
+  filename         = "../../../../backend/lambda_functions/tickets/get_user_tickets.py.zip"
   function_name    = "get-user-tickets-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_user_tickets.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_user_tickets.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/get_user_tickets.py.zip")
   environment {
     variables = {
       TICKET_TABLE = "ticket-table-${var.environment}",
@@ -425,12 +437,12 @@ resource "aws_lambda_function" "get-user-tickets" {
 }
 
 resource "aws_lambda_function" "get-ticket-by-id" {
-  filename         = "../../../../backend/lambda_functions/get_ticket_by_id.py.zip"
+  filename         = "../../../../backend/lambda_functions/tickets/get_ticket_by_id.py.zip"
   function_name    = "get-ticket-by-id-${var.environment}"
   role             = aws_iam_role.lambda_execution_role.arn
   handler          = "get_ticket_by_id.lambda_handler"
   runtime          = "python3.9"
-  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/get_ticket_by_id.py.zip")
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/get_ticket_by_id.py.zip")
   environment {
     variables = {
       TICKET_TABLE = "ticket-table-${var.environment}",
@@ -1862,9 +1874,15 @@ resource "aws_api_gateway_deployment" "this" {
     aws_api_gateway_integration_response.tickets_id_options_200,
   ]
   rest_api_id = aws_api_gateway_rest_api.this.id
-  stage_name  = var.environment
 
   lifecycle {
     create_before_destroy = true
   }
+}
+
+# Add this after your deployment resource
+resource "aws_api_gateway_stage" "this" {
+  deployment_id = aws_api_gateway_deployment.this.id
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  stage_name    = var.environment
 }

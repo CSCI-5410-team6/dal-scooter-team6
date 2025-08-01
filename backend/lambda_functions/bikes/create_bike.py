@@ -2,12 +2,17 @@ import json
 import os
 import boto3
 import uuid
+import base64
 from datetime import datetime
 from decimal import Decimal
 
 dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+
 bikes_table = dynamodb.Table(os.environ.get('BIKES_TABLE', 'BikesTable'))
 availability_table = dynamodb.Table(os.environ.get('AVAILABILITY_TABLE', 'availability-table-dev'))
+bucket_name = os.environ.get('BIKE_IMAGES_BUCKET', 'dalscooter-bike-images')
+
 
 def lambda_handler(event, context):
     try:
@@ -21,29 +26,45 @@ def lambda_handler(event, context):
 
         # Parse request body
         body = json.loads(event.get("body", "{}"))
-        
+
         # Validate required fields
-        required_fields = ["bikeId", "model", "hourlyRate"]
+        required_fields = ["bikeId", "type", "hourlyRate", "imageBase64"]
         for field in required_fields:
             if not body.get(field):
                 return response(400, f"Missing required field: {field}")
 
         bike_id = body["bikeId"]
-        
+
         # Check if bike already exists
         existing_bike = bikes_table.get_item(Key={"bikeId": bike_id})
         if existing_bike.get("Item"):
             return response(409, f"Bike with ID '{bike_id}' already exists.")
 
+        # Upload image to S3
+        image_base64 = body["imageBase64"]
+        try:
+            image_bytes = base64.b64decode(image_base64)
+        except Exception:
+            return response(400, "Invalid base64 image data.")
+
+        image_key = f"bikes/{bike_id}-{str(uuid.uuid4())}.jpg"
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=image_key,
+            Body=image_bytes,
+            ContentType='image/jpeg'
+        )
+        image_url = f"https://{bucket_name}.s3.amazonaws.com/{image_key}"
+
         # Create bike item
         bike_item = {
             "bikeId": bike_id,
-            "model": body["model"],
+            "type": body["type"],
             "hourlyRate": Decimal(str(body["hourlyRate"])),
             "franchiseId": franchise_id,
             "status": body.get("status", "available"),
-            "features": body.get("features", []),
-            "imageUrl": body.get("imageUrl", ""),
+            "features": body.get("features", {}),
+            "imageUrl": image_url,
             "discountCode": body.get("discountCode", ""),
             "createdAt": datetime.utcnow().isoformat(),
             "updatedAt": datetime.utcnow().isoformat()
@@ -71,10 +92,9 @@ def lambda_handler(event, context):
             "updatedAt": datetime.utcnow().isoformat()
         }
 
-        # Add availability record to DynamoDB
         availability_table.put_item(Item=availability_item)
 
-        # Convert Decimal to float for JSON serialization
+        # Convert Decimal to float for response
         bike_item["hourlyRate"] = float(bike_item["hourlyRate"])
 
         return response(201, {
@@ -94,6 +114,7 @@ def lambda_handler(event, context):
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
         return response(500, f"Internal server error: {str(e)}")
+
 
 def response(status_code, body):
     return {

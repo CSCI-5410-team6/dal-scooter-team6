@@ -24,12 +24,19 @@ def lambda_handler(event, context):
         if user_franchise_id != franchise_id:
             return response(403, {"error": "You can only access your own franchise feedback."})
         
-        # Query feedbacks for this franchiseId
-        resp = feedback_table.query(
-            IndexName="FranchiseIdIndex",
-            KeyConditionExpression=boto3.dynamodb.conditions.Key('franchiseId').eq(franchise_id)
+        # Scan feedbacks for this franchiseId (since GSI doesn't exist)
+        resp = feedback_table.scan(
+            FilterExpression=boto3.dynamodb.conditions.Attr('franchiseId').eq(franchise_id)
         )
         items = resp.get('Items', [])
+        
+        # Handle pagination if needed
+        while 'LastEvaluatedKey' in resp:
+            resp = feedback_table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('franchiseId').eq(franchise_id),
+                ExclusiveStartKey=resp['LastEvaluatedKey']
+            )
+            items.extend(resp.get('Items', []))
         
         summary = defaultdict(lambda: {"count": 0, "sum": 0.0})
         for item in items:
@@ -50,6 +57,9 @@ def lambda_handler(event, context):
         }
         return response(200, result)
     except Exception as e:
+        print(f"Error in get_franchise_feedback: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return response(500, {"error": str(e)})
 
 def response(status, body):

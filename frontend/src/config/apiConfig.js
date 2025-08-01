@@ -1,7 +1,7 @@
 // API Configuration
 const API_CONFIG = {
   // Base URL for the API
-  BASE_URL: "https://j5xf95pezl.execute-api.ca-central-1.amazonaws.com/dev",
+  BASE_URL: "https://ez4f6tok6h.execute-api.ca-central-1.amazonaws.com/dev",
 
   // Bike endpoints
   BIKES: {

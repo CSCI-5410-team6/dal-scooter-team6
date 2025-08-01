@@ -4,7 +4,7 @@ import boto3
 from decimal import Decimal
 
 dynamodb = boto3.resource('dynamodb')
-booking_table = dynamodb.Table(os.environ['BOOKING_TABLE'])
+booking_table = dynamodb.Table(os.environ['BOOKINGS_TABLE'])
 
 def lambda_handler(event, context):
     try:
@@ -12,43 +12,43 @@ def lambda_handler(event, context):
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         user_id = claims.get("sub")
         user_type = claims.get("custom:userType", "")
-        
+
         if not user_id:
             return response(401, {"error": "Authentication required"})
-        
-        # Only customers can access their own bookings
-        if user_type != "customer":
-            return response(403, {"error": "Only customers can access their bookings"})
-        
-        # Scan all bookings and filter by userId
-        response_scan = booking_table.scan(
-            FilterExpression="userId = :userId",
-            ExpressionAttributeValues={
-                ":userId": user_id
-            }
-        )
-        
+
+        # Only admins can access all bookings
+        if user_type != "admin":
+            return response(403, {"error": "Only admins can access all bookings"})
+
+        # Scan all bookings (for admin)
+        response_scan = booking_table.scan()
         bookings = response_scan.get("Items", [])
-        
+
         # Handle pagination if needed
         while "LastEvaluatedKey" in response_scan:
             response_scan = booking_table.scan(
-                FilterExpression="userId = :userId",
-                ExpressionAttributeValues={
-                    ":userId": user_id
-                },
                 ExclusiveStartKey=response_scan["LastEvaluatedKey"]
             )
             bookings.extend(response_scan.get("Items", []))
-        
+
+        # Add email information to each booking
+        for booking in bookings:
+            # Use email field if available, fallback to userId
+            if 'email' in booking:
+                booking['displayName'] = booking['email']
+            elif 'mail' in booking:
+                booking['displayName'] = booking['mail']
+            else:
+                booking['displayName'] = f"User {booking.get('userId', 'Unknown')[:8]}"
+
         # Convert Decimal objects for JSON serialization
         bookings = convert_decimal(bookings)
-        
+
         return response(200, {
             "bookings": bookings,
             "count": len(bookings)
         })
-        
+
     except Exception as e:
         print("Error in lambda_handler:", str(e))
         import traceback

@@ -33,8 +33,8 @@ Amplify.configure({
   Auth: {
     region: "ca-central-1",
     userPoolId: "ca-central-1_ZrlF5Fnvd", // From Terraform output
-    userPoolWebClientId: "2l46jge03ucuee9tlb0milvehl", // From Terraform output
-    identityPoolId: "ca-central-1:86fa591a-3bcc-4793-918b-9bc1ebd2d5b7", // From Terraform output
+    userPoolWebClientId: "11h0cp88kuq5ucd3fkgfb79ceu", // From Terraform output
+    identityPoolId: "ca-central-1:e3ec729b-d828-42ee-b752-7400071b905d", // From Terraform output
     authenticationFlowType: "CUSTOM_AUTH",
   },
 });
