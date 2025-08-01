@@ -1,98 +1,107 @@
 import json
-import boto3
 import os
-import base64
+import boto3
 import uuid
 from datetime import datetime
-from boto3.dynamodb.conditions import Key
- 
+from decimal import Decimal
+
 dynamodb = boto3.resource('dynamodb')
-s3 = boto3.client('s3')
- 
-table_name = os.environ.get('BIKES_TABLE', 'BikesTable')
-bucket_name = os.environ.get('BIKE_IMAGES_BUCKET', 'dalscooter-bike-images')
- 
-table = dynamodb.Table(table_name)
- 
-VALID_BIKE_TYPES = {"ebike", "gyroscooter", "segway"}
- 
+bikes_table = dynamodb.Table(os.environ.get('BIKES_TABLE', 'BikesTable'))
+availability_table = dynamodb.Table(os.environ.get('AVAILABILITY_TABLE', 'availability-table-dev'))
+
 def lambda_handler(event, context):
     try:
-        body = json.loads(event.get("body", "{}"))
- 
-        bike_id = body.get("bikeId")
-        bike_type = body.get("type")
-        features = body.get("features")
-        hourly_rate = body.get("hourlyRate")
-        discount_code = body.get("discountCode", "")
-        image_base64 = body.get("imageBase64")
- 
-        # Validate required fields
-        if not all([bike_id, bike_type, features, hourly_rate, image_base64]):
-            return response(400, "Missing required fields including imageBase64.")
- 
-        if bike_type not in VALID_BIKE_TYPES:
-            return response(400, f"Invalid bike type '{bike_type}'.")
- 
-        # Get franchiseId from Cognito claims
+        # Get Cognito claims
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-
         user_type = claims.get("custom:userType")
-        if user_type != "admin":
-            return response(403, "Unauthorized: Only admin can add a bike.")
-
         franchise_id = claims.get("cognito:username")
-        if not franchise_id:
-            return response(403, "Unauthorized: Franchise identity missing.")
- 
+
+        if user_type != "admin":
+            return response(403, "Unauthorized: Only admin can create a bike.")
+
+        # Parse request body
+        body = json.loads(event.get("body", "{}"))
+        
+        # Validate required fields
+        required_fields = ["bikeId", "model", "hourlyRate"]
+        for field in required_fields:
+            if not body.get(field):
+                return response(400, f"Missing required field: {field}")
+
+        bike_id = body["bikeId"]
+        
         # Check if bike already exists
-        existing = table.get_item(Key={"bikeId": bike_id})
-        if "Item" in existing:
+        existing_bike = bikes_table.get_item(Key={"bikeId": bike_id})
+        if existing_bike.get("Item"):
             return response(409, f"Bike with ID '{bike_id}' already exists.")
- 
-        # Upload image to S3
-        image_bytes = base64.b64decode(image_base64)
-        image_key = f"bikes/{bike_id}-{str(uuid.uuid4())}.jpg"
- 
-        s3.put_object(
-            Bucket=bucket_name,
-            Key=image_key,
-            Body=image_bytes,
-            ContentType='image/jpeg'
-        )
- 
-        image_url = f"https://{bucket_name}.s3.amazonaws.com/{image_key}"
- 
-        # Create record
-        item = {
+
+        # Create bike item
+        bike_item = {
             "bikeId": bike_id,
-            "type": bike_type,
-            "features": features,
-            "hourlyRate": hourly_rate,
-            "discountCode": discount_code,
-            "imageUrl": image_url,
+            "model": body["model"],
+            "hourlyRate": Decimal(str(body["hourlyRate"])),
             "franchiseId": franchise_id,
-            "createdAt": datetime.utcnow().isoformat()
+            "status": body.get("status", "available"),
+            "features": body.get("features", []),
+            "imageUrl": body.get("imageUrl", ""),
+            "discountCode": body.get("discountCode", ""),
+            "createdAt": datetime.utcnow().isoformat(),
+            "updatedAt": datetime.utcnow().isoformat()
         }
- 
-        table.put_item(Item=item)
- 
-        return response(201, {
-            "message": "Bike created successfully.",
+
+        # Add bike to DynamoDB
+        bikes_table.put_item(Item=bike_item)
+
+        # Create default availability record
+        availability_item = {
             "bikeId": bike_id,
-            "imageUrl": image_url
+            "isAvailable": True,
+            "timeSlots": [
+                {"start": "09:00", "end": "10:00"},
+                {"start": "10:00", "end": "11:00"},
+                {"start": "11:00", "end": "12:00"},
+                {"start": "12:00", "end": "13:00"},
+                {"start": "13:00", "end": "14:00"},
+                {"start": "14:00", "end": "15:00"},
+                {"start": "15:00", "end": "16:00"},
+                {"start": "16:00", "end": "17:00"},
+                {"start": "17:00", "end": "18:00"}
+            ],
+            "notes": "Default availability created with bike",
+            "updatedAt": datetime.utcnow().isoformat()
+        }
+
+        # Add availability record to DynamoDB
+        availability_table.put_item(Item=availability_item)
+
+        # Convert Decimal to float for JSON serialization
+        bike_item["hourlyRate"] = float(bike_item["hourlyRate"])
+
+        return response(201, {
+            "message": "Bike created successfully",
+            "bike": bike_item,
+            "availability": {
+                "bikeId": bike_id,
+                "isAvailable": True,
+                "timeSlots": availability_item["timeSlots"]
+            }
         })
- 
+
+    except json.JSONDecodeError as e:
+        return response(400, f"Invalid JSON in request body: {str(e)}")
     except Exception as e:
+        print(f"Error in create_bike lambda: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return response(500, f"Internal server error: {str(e)}")
- 
- 
+
 def response(status_code, body):
     return {
         "statusCode": status_code,
         "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+            "Access-Control-Allow-Methods": "POST,OPTIONS"
         },
         "body": json.dumps(body if isinstance(body, dict) else {"error": body})
     }
