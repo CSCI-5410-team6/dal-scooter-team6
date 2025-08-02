@@ -91,3 +91,8 @@ yarn-debug.log*
 *.jpeg
 *.svg
 *.zip
+infrastructure/gcp/environments/dal-scooter-team-6-78e45465c1a4.json
+infrastructure/gcp/environments/*.json
+infrastructure/gcp/environments/dev/dal-scooter-team-6-78e45465c1a4.json
+infrastructure/gcp/environments/dev/google-cloud-sdk-456.0.0-darwin-arm.tar.gz
+*.tar.gz
