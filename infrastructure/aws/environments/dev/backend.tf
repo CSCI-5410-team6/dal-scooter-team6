@@ -54,12 +54,15 @@ module "cognito" {
 }
 
 module "api_gateway" {
-  source                   = "../../modules/api-gateway"
-  region                   = "ca-central-1"
-  project_name             = var.project_name
-  environment              = var.environment
-  cognito_user_pool_arn    = module.cognito.user_pool_arn
-  sns_topic_arn            = module.sns.sns_topic_arn
+  source                        = "../../modules/api-gateway"
+  region                        = "ca-central-1"
+  project_name                  = var.project_name
+  environment                   = var.environment
+  cognito_user_pool_arn         = module.cognito.user_pool_arn
+  cognito_user_pool_id          = module.cognito.user_pool_id
+  sns_topic_arn                 = module.sns.sns_topic_arn
+  booking_requests_queue_url    = module.sns.booking_requests_queue_url
+  booking_requests_queue_arn    = module.sns.booking_requests_queue_arn
 }
 
 variable "environment" {

@@ -434,6 +434,7 @@ const Dashboard: React.FC = () => {
           body: JSON.stringify({
             bikeId: selectedBike.bikeId,
             slotTime: selectedSlot,
+            bookingDate: new Date().toISOString().split("T")[0], // Today's date in YYYY-MM-DD format
           }),
         }
       );
@@ -449,7 +450,9 @@ const Dashboard: React.FC = () => {
         throw new Error(data.error || `Booking failed: ${response.status}`);
       }
 
-      setBookingSuccess("Booking created successfully!");
+      setBookingSuccess(
+        "Booking request submitted successfully! Awaiting approval."
+      );
       setBookingDetails(data.booking);
 
       // Refresh availability for this bike
@@ -632,11 +635,12 @@ const Dashboard: React.FC = () => {
               </button>
               <div>
                 <h1 className="text-3xl font-bold text-green-400">
-                  Available Bikes
+                  Available Bikes (Single Bookings)
                 </h1>
                 {!isUserLoggedIn() && (
                   <p className="text-blue-300 text-sm mt-1">
-                    💡 Guest Mode: Login to check availability and book
+                    💡 Guest Mode: Login to check availability and book (single
+                    bookings only)
                   </p>
                 )}
               </div>
@@ -1069,7 +1073,7 @@ const Dashboard: React.FC = () => {
 
                     <div className="mb-6">
                       <h3 className="text-lg font-semibold mb-4">
-                        Available Time Slots
+                        Available Time Slots (Single Booking)
                       </h3>
                       <div className="grid grid-cols-3 gap-2">
                         {availabilityData[
@@ -1084,6 +1088,14 @@ const Dashboard: React.FC = () => {
                           </button>
                         ))}
                       </div>
+                    </div>
+
+                    <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500 rounded-lg">
+                      <p className="text-blue-300 text-sm">
+                        💡 <strong>Single Booking Policy:</strong> You can only
+                        book one time slot per bike. Each slot represents a
+                        1-hour rental period.
+                      </p>
                     </div>
 
                     <div className="flex space-x-4">
@@ -1112,7 +1124,7 @@ const Dashboard: React.FC = () => {
           <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-green-400">
-                Confirm Booking
+                Confirm Single Booking
               </h2>
               <button
                 onClick={handleCloseBookingModal}
@@ -1127,7 +1139,7 @@ const Dashboard: React.FC = () => {
                 <div className="mb-4">
                   <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-green-400 mb-2">
-                    Booking Successful!
+                    Booking Request Submitted!
                   </h3>
                   <p className="text-gray-300 mb-4">{bookingSuccess}</p>
                 </div>
@@ -1209,7 +1221,13 @@ const Dashboard: React.FC = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-gray-300">Booking Type:</span>
-                        <span className="text-white">Daily Booking</span>
+                        <span className="text-white">Single Daily Booking</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Note:</span>
+                        <span className="text-blue-400 text-sm">
+                          One booking per time slot
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-300">Time:</span>

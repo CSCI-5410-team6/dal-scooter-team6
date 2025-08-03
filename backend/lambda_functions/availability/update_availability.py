@@ -34,36 +34,59 @@ def lambda_handler(event, context):
 
         # Parse request body
         body = json.loads(event.get("body", "{}"))
-        is_available = body.get("isAvailable")
-        time_slots = body.get("timeSlots", [])
-        notes = body.get("notes", "")
+        updates = body.get("updates", [])  # Array of slot updates
+        date = body.get("date")  # Required date field
+        
+        if not date:
+            return response(400, {"error": "date field is required"})
+            
+        if not updates or not isinstance(updates, list):
+            return response(400, {"error": "updates array is required with slot updates"})
 
-        if is_available is None:
-            return response(400, {"error": "isAvailable field is required"})
+        # Validate date format
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            return response(400, {"error": "Invalid date format. Use YYYY-MM-DD"})
 
-        # Create or update availability record
-        availability_item = {
-            "bikeId": bike_id,
-            "isAvailable": is_available,
-            "updatedBy": user_id,
-            "updatedAt": datetime.now().isoformat()
-        }
-
-        if time_slots:
-            availability_item["timeSlots"] = time_slots
-
-        if notes:
-            availability_item["notes"] = notes
-
-        # Put item in DynamoDB
-        availability_table.put_item(Item=availability_item)
+        updated_slots = []
+        
+        # Process each slot update
+        for update in updates:
+            time_slot = update.get("timeSlot")
+            status = update.get("status")
+            booking_id = update.get("bookingId", "")
+            
+            if not time_slot or not status:
+                continue
+                
+            if status not in ["AVAILABLE", "UNAVAILABLE", "RESERVED"]:
+                continue
+            
+            # Create/update individual availability record for this slot
+            unique_bike_slot_id = f"{bike_id}#{date}#{time_slot}"
+            availability_item = {
+                "bikeId": unique_bike_slot_id,  # Unique primary key for each slot
+                "originalBikeId": bike_id,      # Keep reference to original bike
+                "date": date,
+                "timeSlot": time_slot,
+                "status": status,
+                "updatedBy": user_id,
+                "updatedAt": datetime.now().isoformat() + "Z"
+            }
+            
+            if booking_id:
+                availability_item["bookingId"] = booking_id
+            
+            # Use unique key for individual slot records
+            availability_table.put_item(Item=availability_item)
+            updated_slots.append(f"{time_slot}:{status}")
 
         return response(200, {
             "message": "Availability updated successfully",
             "bikeId": bike_id,
-            "isAvailable": is_available,
-            "timeSlots": time_slots,
-            "notes": notes
+            "date": date,
+            "updatedSlots": updated_slots
         })
 
     except Exception as e:

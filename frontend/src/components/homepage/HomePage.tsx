@@ -682,9 +682,12 @@ function HomePage() {
 
   const handleConfirmBooking = async () => {
     if (!selectedBikeForAction || selectedSlots.length === 0) {
-      setBookingError("Please select at least one time slot");
+      setBookingError("Please select a time slot");
       return;
     }
+
+    // For single booking, only use the first selected slot
+    const selectedSlot = selectedSlots[0];
 
     setBookingLoading(true);
     setBookingError("");
@@ -712,7 +715,7 @@ function HomePage() {
           body: JSON.stringify({
             bikeId: selectedBikeForAction.bikeId,
             bookingDate: new Date().toISOString().split("T")[0], // YYYY-MM-DD format
-            slotTimes: selectedSlots, // Array of slot times
+            slotTime: selectedSlot, // Single slot time
           }),
         }
       );
@@ -729,9 +732,9 @@ function HomePage() {
       }
 
       setBookingSuccess(
-        `Successfully created ${data.totalBookings} booking(s)!`
+        `Booking request submitted successfully! Awaiting approval.`
       );
-      setBookingDetails(data.bookings);
+      setBookingDetails(data.booking);
 
       // Close modal after 3 seconds
       setTimeout(() => {
@@ -763,6 +766,18 @@ function HomePage() {
   const indexOfFirstBike = indexOfLastBike - itemsPerPage;
   const currentBikes = filteredBikes.slice(indexOfFirstBike, indexOfLastBike);
   const totalPages = Math.ceil(filteredBikes.length / itemsPerPage);
+
+  // Debug logging
+  console.log("HomePage Debug:", {
+    userName,
+    userType,
+    bikesCount: bikes.length,
+    searchTerm,
+    currentBikePage,
+    totalPages,
+    filteredBikesCount: filteredBikes.length,
+    currentBikesCount: currentBikes.length,
+  });
 
   const handlePageChange = (page: number) => {
     setCurrentBikePage(page);
@@ -1729,12 +1744,12 @@ function HomePage() {
                 availabilityData.availableSlots.length > 0 ? (
                 <div>
                   <h3 className="text-lg font-semibold text-white mb-4">
-                    Select Time Slots (Multiple Selection)
+                    Select Time Slot (Single Booking)
                   </h3>
                   {selectedSlots.length > 0 && (
                     <div className="mb-4 p-3 bg-green-900/30 border border-green-500 rounded-lg">
                       <p className="text-green-400 text-sm">
-                        Selected: {selectedSlots.join(", ")}
+                        Selected Time: {selectedSlots[0]}
                       </p>
                     </div>
                   )}
@@ -1744,13 +1759,8 @@ function HomePage() {
                         <div key={index} className="space-y-2">
                           <button
                             onClick={() => {
-                              if (selectedSlots.includes(slot)) {
-                                setSelectedSlots(
-                                  selectedSlots.filter((s) => s !== slot)
-                                );
-                              } else {
-                                setSelectedSlots([...selectedSlots, slot]);
-                              }
+                              // For single booking, replace the selection instead of adding/removing
+                              setSelectedSlots([slot]);
                             }}
                             className={`w-full p-4 rounded-lg border-2 transition-colors ${
                               selectedSlots.includes(slot)
@@ -1822,10 +1832,8 @@ function HomePage() {
                   className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none"
                 >
                   {bookingLoading
-                    ? "Creating Bookings..."
-                    : `Confirm ${selectedSlots.length} Booking${
-                        selectedSlots.length !== 1 ? "s" : ""
-                      }`}
+                    ? "Submitting Request..."
+                    : "Confirm Single Booking"}
                 </button>
                 <button
                   onClick={handleCloseBookingModal}
