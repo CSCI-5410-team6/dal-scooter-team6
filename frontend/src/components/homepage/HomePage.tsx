@@ -22,6 +22,8 @@ import { useAuthContext } from "../../contextStore/AuthContext";
 import { Auth } from "aws-amplify";
 import API_CONFIG from "../../config/apiConfig";
 import FeedbackModal from "../FeedbackModal";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 interface Bike {
   bikeId: string;
@@ -731,18 +733,24 @@ function HomePage() {
         throw new Error(data.error || `Booking failed: ${response.status}`);
       }
 
-      setBookingSuccess(
-        `Booking request submitted successfully! Awaiting approval.`
+      // Show toast notification
+      toast.success(
+        "Your booking request has been submitted and is waiting for approval!",
+        {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        }
       );
-      setBookingDetails(data.booking);
 
-      // Close modal after 3 seconds
-      setTimeout(() => {
-        setShowBookingModal(false);
-        setBookingSuccess("");
-        setBookingDetails(null);
-        setSelectedSlots([]); // Reset selected slots
-      }, 3000);
+      // Close modal immediately
+      setShowBookingModal(false);
+      setBookingSuccess("");
+      setBookingDetails(null);
+      setSelectedSlots([]); // Reset selected slots
     } catch (err: any) {
       setBookingError(err.message || "Failed to create bookings");
     } finally {
@@ -2007,6 +2015,7 @@ function HomePage() {
 
       {/* Chatbot */}
       <Chatbot />
+      <ToastContainer />
     </div>
   );
 }

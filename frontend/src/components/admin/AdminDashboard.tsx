@@ -43,10 +43,11 @@ interface AvailabilityData {
 }
 
 const ADMIN_TABS = [
+  { key: "home", label: "Home" },
   { key: "bikes", label: "Bike List" },
+  { key: "approve-bookings", label: "Approve Bookings" },
   { key: "bookings", label: "Booking Stats" },
   { key: "tickets", label: "Tickets" },
-  { key: "messages", label: "Messages" },
   { key: "analytics", label: "Analytics" },
 ];
 
@@ -137,6 +138,14 @@ const AdminDashboard: React.FC = () => {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState("");
 
+  // Approve bookings state
+  const [pendingBookings, setPendingBookings] = useState<any[]>([]);
+  const [pendingBookingsLoading, setPendingBookingsLoading] = useState(false);
+  const [pendingBookingsError, setPendingBookingsError] = useState("");
+  const [approveBookingLoading, setApproveBookingLoading] = useState<
+    string | null
+  >(null);
+
   // Bookings state
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
@@ -176,6 +185,139 @@ const AdminDashboard: React.FC = () => {
   });
 
   const navigate = useNavigate();
+
+  // Fetch pending bookings
+  const fetchPendingBookings = useCallback(async () => {
+    setPendingBookingsLoading(true);
+    setPendingBookingsError("");
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+      if (!idToken) {
+        throw new Error("ID token not found. Please log in again.");
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.BOOKINGS.GET_ALL_BOOKINGS_ADMIN}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: idToken,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      // Filter only pending approval bookings
+      const pending = data.bookings
+        ? data.bookings.filter(
+            (booking: any) => booking.status === "PENDING_APPROVAL"
+          )
+        : [];
+      setPendingBookings(pending);
+    } catch (err: any) {
+      setPendingBookingsError(
+        err.message || "Failed to fetch pending bookings"
+      );
+    } finally {
+      setPendingBookingsLoading(false);
+    }
+  }, []);
+
+  // Approve or reject booking
+  const handleApproveBooking = useCallback(
+    async (referenceCode: string, status: "APPROVED" | "REJECTED") => {
+      setApproveBookingLoading(referenceCode);
+      try {
+        const idTokenKey = Object.keys(localStorage).find(
+          (key) =>
+            key.includes("CognitoIdentityServiceProvider") &&
+            key.includes("idToken")
+        );
+        const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+        console.log("DEBUG: ID Token Key:", idTokenKey);
+        console.log("DEBUG: ID Token exists:", !!idToken);
+        console.log("DEBUG: Reference Code:", referenceCode);
+        console.log("DEBUG: Status:", status);
+
+        if (!idToken) {
+          throw new Error("ID token not found. Please log in again.");
+        }
+
+        const url = `${API_CONFIG.BASE_URL}${API_CONFIG.BOOKINGS.APPROVE(
+          referenceCode
+        )}`;
+        console.log("DEBUG: Request URL:", url);
+        console.log("DEBUG: Request body:", { status });
+
+        const response = await fetch(url, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: idToken,
+          },
+          body: JSON.stringify({ status }),
+        });
+
+        console.log("DEBUG: Response status:", response.status);
+        console.log("DEBUG: Response headers:", response.headers);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log("DEBUG: Error response:", errorText);
+          throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        // Show success notification
+        toast.success(`Booking ${status.toLowerCase()} successfully!`, {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+
+        // Refresh pending bookings
+        fetchPendingBookings();
+      } catch (err: any) {
+        toast.error(
+          err.message || `Failed to ${status.toLowerCase()} booking`,
+          {
+            position: "top-right",
+            autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          }
+        );
+      } finally {
+        setApproveBookingLoading(null);
+      }
+    },
+    [fetchPendingBookings]
+  );
+
+  // Load pending bookings when tab is active
+  useEffect(() => {
+    if (activeTab === "approve-bookings") {
+      fetchPendingBookings();
+    }
+  }, [activeTab, fetchPendingBookings]);
 
   const fetchBikes = useCallback(async () => {
     setBikesLoading(true);
@@ -1364,7 +1506,7 @@ const AdminDashboard: React.FC = () => {
       });
     } catch (err: any) {
       const errorMessage = `Failed to delete bike: ${err.message}`;
-      
+
       // Show error toast notification
       toast.error(errorMessage, {
         position: "top-right",
@@ -1488,23 +1630,13 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div className="hidden md:block">
                 <div className="ml-10 flex items-baseline space-x-8">
-                  <button
-                    onClick={() => setActiveTab("home")}
-                    className={`px-3 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105 ${
-                      activeTab === "home"
-                        ? "text-green-400"
-                        : "text-gray-300 hover:text-green-400"
-                    }`}
-                  >
-                    Home
-                  </button>
                   {ADMIN_TABS.map((tab) => (
                     <button
                       key={tab.key}
                       onClick={() => setActiveTab(tab.key)}
                       className={`px-3 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105 ${
                         activeTab === tab.key
-                          ? "text-green-400"
+                          ? "text-green-400 border-b-2 border-green-400"
                           : "text-gray-300 hover:text-green-400"
                       }`}
                     >
@@ -2761,6 +2893,230 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+          {activeTab === "approve-bookings" && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">Approve Bookings</h2>
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={fetchPendingBookings}
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              <div className="mb-6">
+                <p className="text-gray-400">
+                  Review and approve/reject pending booking requests.
+                </p>
+              </div>
+
+              {pendingBookingsLoading ? (
+                <div className="text-center py-8">
+                  <div className="flex flex-col items-center space-y-4">
+                    <svg
+                      className="animate-spin h-8 w-8 text-green-400"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <div className="text-green-400 font-medium">
+                      Loading pending bookings...
+                    </div>
+                  </div>
+                </div>
+              ) : pendingBookingsError ? (
+                <div className="text-center py-8">
+                  <div className="text-red-400 mb-4">
+                    {pendingBookingsError}
+                  </div>
+                  <button
+                    onClick={fetchPendingBookings}
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : pendingBookings.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="bg-gray-800 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
+                    <CheckCircle className="h-12 w-12 text-green-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-300 mb-2">
+                    No pending bookings
+                  </h3>
+                  <p className="text-gray-400 mb-6">
+                    All booking requests have been processed.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="bg-gray-700 rounded-lg p-4 mb-6">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-yellow-400 mb-2">
+                        {pendingBookings.length}
+                      </div>
+                      <div className="text-sm text-gray-300">
+                        Pending Approval
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {pendingBookings.map((booking) => (
+                      <div
+                        key={booking.bookingId}
+                        className="bg-gray-800 rounded-xl p-6 border border-gray-700 hover:border-gray-600 transition-all duration-300"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center space-x-3">
+                            <h3 className="text-xl font-semibold text-white">
+                              {booking.bikeId}
+                            </h3>
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-500 text-white">
+                              PENDING_APPROVAL
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-400">
+                              {formatDate(booking.createdAt)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span className="text-gray-300">
+                              Date: {booking.bookingDate}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Clock className="h-4 w-4 text-gray-400" />
+                            <span className="text-gray-300">
+                              Time: {booking.slotTime}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-300">
+                              Reference: {booking.referenceCode}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-300">
+                              Email: {booking.email}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex space-x-3 mt-6">
+                          <button
+                            onClick={() =>
+                              handleApproveBooking(
+                                booking.referenceCode,
+                                "APPROVED"
+                              )
+                            }
+                            disabled={
+                              approveBookingLoading === booking.referenceCode
+                            }
+                            className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none flex items-center justify-center space-x-2"
+                          >
+                            {approveBookingLoading === booking.referenceCode ? (
+                              <>
+                                <svg
+                                  className="animate-spin h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                  ></circle>
+                                  <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                  ></path>
+                                </svg>
+                                <span>Approving...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-4 w-4" />
+                                <span>Approve</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleApproveBooking(
+                                booking.referenceCode,
+                                "REJECTED"
+                              )
+                            }
+                            disabled={
+                              approveBookingLoading === booking.referenceCode
+                            }
+                            className="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none flex items-center justify-center space-x-2"
+                          >
+                            {approveBookingLoading === booking.referenceCode ? (
+                              <>
+                                <svg
+                                  className="animate-spin h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                  ></circle>
+                                  <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                  ></path>
+                                </svg>
+                                <span>Rejecting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-4 w-4" />
+                                <span>Reject</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {activeTab === "bookings" && (
@@ -4320,7 +4676,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {/* Toast Container */}
       <ToastContainer
         position="top-right"

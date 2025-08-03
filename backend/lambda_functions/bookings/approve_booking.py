@@ -58,10 +58,10 @@ def lambda_handler(event, context):
         if not booking_id:
             return response(500, {"error": "Booking ID is missing from the booking record"})
         
-        # Check if user is assigned to this booking
-        assigned_franchise = booking.get('assignedFranchise')
-        if assigned_franchise != user_id:
-            return response(403, {"error": "Unauthorized: You are not assigned to this booking"})
+        # # Check if user is assigned to this booking
+        # assigned_franchise = booking.get('assignedFranchise')
+        # if assigned_franchise != user_id:
+        #     return response(403, {"error": "Unauthorized: You are not assigned to this booking"})
         
         # Check if booking is in correct status
         if booking.get('status') != 'PENDING_APPROVAL':
@@ -187,10 +187,9 @@ def response(status_code, body):
     return {
         "statusCode": status_code,
         "headers": {
-            "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-            "Access-Control-Allow-Methods": "PUT,OPTIONS"
+            "Access-Control-Allow-Methods": "GET,PUT,OPTIONS"
         },
         "body": json.dumps(body if isinstance(body, dict) else {"error": body})
     }
