@@ -19,7 +19,22 @@ variable "cognito_user_pool_arn" {
   type        = string
 }
 
+variable "cognito_user_pool_id" {
+  description = "ID of the Cognito User Pool"
+  type        = string
+}
+
 variable "sns_topic_arn" {
   description = "ARN of the SNS topic for booking notifications"
+  type        = string
+}
+
+variable "booking_requests_queue_url" {
+  description = "URL of the SQS queue for booking requests"
+  type        = string
+}
+
+variable "booking_requests_queue_arn" {
+  description = "ARN of the SQS queue for booking requests"
   type        = string
 }

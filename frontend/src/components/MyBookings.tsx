@@ -120,12 +120,27 @@ const MyBookings: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    // Handle date strings in YYYY-MM-DD format correctly
+    if (dateString.includes("-") && dateString.length === 10) {
+      const [year, month, day] = dateString.split("-").map(Number);
+      const date = new Date(year, month - 1, day); // month is 0-indexed
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } else {
+      // Handle ISO timestamp format (createdAt)
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return "Invalid Date";
+      }
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    }
   };
 
   const formatTime = (timeString: string) => {
