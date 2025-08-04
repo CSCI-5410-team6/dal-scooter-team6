@@ -20,11 +20,6 @@ variable "table_schema" {
       mode = "REQUIRED"
     },
     {
-      name = "assignedFranchise"
-      type = "STRING"
-      mode = "NULLABLE"
-    },
-    {
       name = "bikeId"
       type = "STRING"
       mode = "REQUIRED"
@@ -71,3 +66,4 @@ variable "table_schema" {
     }
   ]
 }
+
