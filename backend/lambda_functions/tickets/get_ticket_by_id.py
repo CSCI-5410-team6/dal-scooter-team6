@@ -26,6 +26,9 @@ def lambda_handler(event, context):
         user_id = claims.get("sub")
         user_type = claims.get("custom:userType", "")
         
+        # Debug logging
+        logger.info(f"User {user_id} with type '{user_type}' requesting ticket {ticket_id}")
+        
         if not user_id:
             return response(401, {'error': 'Authentication required'})
         
@@ -41,24 +44,25 @@ def lambda_handler(event, context):
         
         ticket = ticket_response['Item']
         
-        # Authorization check
-        if user_type == 'CUSTOMER':
+        # Authorization check - Case insensitive
+        user_type_upper = user_type.upper()
+        
+        if user_type_upper == 'CUSTOMER':
+            # Customers can only view their own tickets
             if ticket.get('userId') != user_id:
                 return response(403, {
                     'error': 'FORBIDDEN',
                     'message': 'You can only view your own tickets'
                 })
-        elif user_type == 'FRANCHISE':
-            if ticket.get('assignedTo') != user_id:
-                return response(403, {
-                    'error': 'FORBIDDEN',
-                    'message': 'You can only view tickets assigned to you'
-                })
-        # Admin can view all tickets
-        elif user_type != 'ADMIN':
+        elif user_type_upper == 'ADMIN':
+            # Admins can view all tickets
+            logger.info(f"Admin {user_id} accessing ticket {ticket_id}")
+        else:
+            # Unknown user type
+            logger.error(f"Unknown user type: '{user_type}' for user {user_id}")
             return response(403, {
                 'error': 'FORBIDDEN',
-                'message': 'Insufficient permissions'
+                'message': f'Unknown user type: {user_type}. Expected: customer or admin'
             })
         
         return response(200, {'ticket': ticket})
