@@ -239,7 +239,7 @@ const AdminDashboard: React.FC = () => {
       const pending = data.bookings
         ? data.bookings.filter((booking: any) => {
             console.log("DEBUG: Booking status:", booking.status);
-            return booking.status === "REQUESTED";
+            return booking.status === "PENDING_APPROVAL";
           })
         : [];
 
