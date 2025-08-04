@@ -28,6 +28,7 @@ def lambda_handler(event, context):
         for item in items:
             if 'rating' in item:
                 item['rating'] = float(item['rating'])
+        print(items)
         return response(200, {
             "bikeId": bike_id,
             "averageRating": avg_rating,
