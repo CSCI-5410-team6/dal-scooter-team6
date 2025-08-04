@@ -22,6 +22,7 @@ const API_CONFIG = {
     DELETE: (bookingId) => `/bookings/${bookingId}`,
     GET_USER_BOOKINGS: "/booking/user",
     GET_ALL_BOOKINGS_ADMIN: "/booking/admin",
+    APPROVE: (referenceCode) => `/booking/${referenceCode}`,
   },
 
   // User endpoints (for future use)

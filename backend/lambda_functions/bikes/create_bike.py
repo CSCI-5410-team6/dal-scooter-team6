@@ -73,26 +73,24 @@ def lambda_handler(event, context):
         # Add bike to DynamoDB
         bikes_table.put_item(Item=bike_item)
 
-        # Create default availability record
-        availability_item = {
-            "bikeId": bike_id,
-            "isAvailable": True,
-            "timeSlots": [
-                {"start": "09:00", "end": "10:00"},
-                {"start": "10:00", "end": "11:00"},
-                {"start": "11:00", "end": "12:00"},
-                {"start": "12:00", "end": "13:00"},
-                {"start": "13:00", "end": "14:00"},
-                {"start": "14:00", "end": "15:00"},
-                {"start": "15:00", "end": "16:00"},
-                {"start": "16:00", "end": "17:00"},
-                {"start": "17:00", "end": "18:00"}
-            ],
-            "notes": "Default availability created with bike",
-            "updatedAt": datetime.utcnow().isoformat()
-        }
-
-        availability_table.put_item(Item=availability_item)
+        # Create individual availability records for each time slot (consistent schema)
+        time_slots = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"]
+        today = datetime.utcnow().strftime('%Y-%m-%d')
+        
+        for slot in time_slots:
+            # Use unique bikeId for each slot to avoid overwriting
+            unique_bike_slot_id = f"{bike_id}#{today}#{slot}"
+            availability_item = {
+                "bikeId": unique_bike_slot_id,  # Unique primary key for each slot
+                "originalBikeId": bike_id,      # Keep reference to original bike
+                "date": today,
+                "timeSlot": slot,
+                "status": "AVAILABLE",
+                "notes": "Default availability created with bike",
+                "updatedAt": datetime.utcnow().isoformat() + "Z"
+            }
+            availability_table.put_item(Item=availability_item)
+            print(f"Created availability record for {bike_id} on {today} at {slot}")
 
         # Convert Decimal to float for response
         bike_item["hourlyRate"] = float(bike_item["hourlyRate"])
@@ -102,8 +100,10 @@ def lambda_handler(event, context):
             "bike": bike_item,
             "availability": {
                 "bikeId": bike_id,
-                "isAvailable": True,
-                "timeSlots": availability_item["timeSlots"]
+                "date": today,
+                "totalSlots": len(time_slots),
+                "availableSlots": time_slots,
+                "status": "All slots available"
             }
         })
 

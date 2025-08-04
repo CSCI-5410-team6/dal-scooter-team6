@@ -1,0 +1,8 @@
+credentials_file        = "./dal-scooter-team-6-78e45465c1a4.json"
+project_id              = "dal-scooter-team-6"
+region                  = "northamerica-northeast1"
+dataset_id              = "dal_scooter_dataset"
+dataset_friendly_name   = "Canadian Dataset"
+dataset_description     = "Created in Montréal (Canada) with Terraform"
+environment             = "dev"
+table_id                = "bookings"
