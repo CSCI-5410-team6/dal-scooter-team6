@@ -86,12 +86,15 @@ const Dashboard: React.FC = () => {
   const [createTicketLoading, setCreateTicketLoading] = useState(false);
   const [createTicketError, setCreateTicketError] = useState("");
   const [createTicketSuccess, setCreateTicketSuccess] = useState("");
+  const [userBookings, setUserBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
   const [ticketForm, setTicketForm] = useState({
     subject: "",
     description: "",
     priority: "medium",
     category: "general",
     bikeId: "",
+    bookingReference: "",
   });
 
   // Fetch all bikes
@@ -178,8 +181,15 @@ const Dashboard: React.FC = () => {
 
   // Fetch user tickets
   const fetchUserTickets = useCallback(async () => {
-    if (!isUserLoggedIn()) return;
+    console.log("fetchUserTickets called");
+    console.log("isUserLoggedIn():", isUserLoggedIn());
 
+    if (!isUserLoggedIn()) {
+      console.log("User not logged in, returning early");
+      return;
+    }
+
+    console.log("User is logged in, proceeding with API call");
     setTicketsLoading(true);
     setTicketsError("");
     try {
@@ -190,20 +200,25 @@ const Dashboard: React.FC = () => {
       );
       const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
 
+      console.log("idTokenKey:", idTokenKey);
+      console.log("idToken exists:", !!idToken);
+
       if (!idToken) {
         throw new Error("ID token not found. Please log in again.");
       }
 
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.TICKETS.GET_USER_TICKETS}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: idToken,
-          },
-        }
-      );
+      const apiUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.TICKETS.GET_USER_TICKETS}`;
+      console.log("Making API call to:", apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: idToken,
+        },
+      });
+
+      console.log("API response status:", response.status);
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -268,6 +283,7 @@ const Dashboard: React.FC = () => {
             priority: "medium",
             category: "general",
             bikeId: "",
+            bookingReference: "",
           });
         }, 2000);
 
@@ -282,6 +298,48 @@ const Dashboard: React.FC = () => {
     },
     [fetchUserTickets]
   );
+
+  // Fetch user bookings for complaint form dropdown
+  const fetchUserBookings = useCallback(async () => {
+    setBookingsLoading(true);
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+      if (!idToken) {
+        console.log("No ID token found, skipping user bookings fetch");
+        return;
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.BOOKINGS.GET_USER_BOOKINGS}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: idToken,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Fetched user bookings:", data);
+      setUserBookings(data.bookings || []);
+    } catch (err: any) {
+      console.error("Failed to fetch user bookings:", err.message);
+      // Don't set error state as this is optional for the complaint form
+    } finally {
+      setBookingsLoading(false);
+    }
+  }, []);
 
   // Load bikes on component mount
   useEffect(() => {
@@ -491,6 +549,7 @@ const Dashboard: React.FC = () => {
 
   // Complaints handlers
   const handleOpenComplaintsModal = () => {
+    console.log("handleOpenComplaintsModal called");
     setShowComplaintsModal(true);
     fetchUserTickets();
   };
@@ -508,7 +567,10 @@ const Dashboard: React.FC = () => {
       priority: "medium",
       category: "general",
       bikeId: "",
+      bookingReference: "",
     });
+    // Fetch user bookings for the dropdown
+    fetchUserBookings();
   };
 
   const handleCloseCreateTicketModal = () => {
@@ -635,12 +697,11 @@ const Dashboard: React.FC = () => {
               </button>
               <div>
                 <h1 className="text-3xl font-bold text-green-400">
-                  Available Bikes (Single Bookings)
+                  Available Bikes
                 </h1>
                 {!isUserLoggedIn() && (
                   <p className="text-blue-300 text-sm mt-1">
-                    💡 Guest Mode: Login to check availability and book (single
-                    bookings only)
+                    💡 Guest Mode: Login to check availability and book
                   </p>
                 )}
               </div>
@@ -1073,7 +1134,7 @@ const Dashboard: React.FC = () => {
 
                     <div className="mb-6">
                       <h3 className="text-lg font-semibold mb-4">
-                        Available Time Slots (Single Booking)
+                        Available Time Slots
                       </h3>
                       <div className="grid grid-cols-3 gap-2">
                         {availabilityData[
@@ -1092,7 +1153,7 @@ const Dashboard: React.FC = () => {
 
                     <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500 rounded-lg">
                       <p className="text-blue-300 text-sm">
-                        💡 <strong>Single Booking Policy:</strong> You can only
+                        💡 <strong>Booking Policy:</strong> You can only
                         book one time slot per bike. Each slot represents a
                         1-hour rental period.
                       </p>
@@ -1124,7 +1185,7 @@ const Dashboard: React.FC = () => {
           <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-green-400">
-                Confirm Single Booking
+                Confirm Booking
               </h2>
               <button
                 onClick={handleCloseBookingModal}
@@ -1221,7 +1282,7 @@ const Dashboard: React.FC = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-gray-300">Booking Type:</span>
-                        <span className="text-white">Single Daily Booking</span>
+                        <span className="text-white">Daily Booking</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-300">Note:</span>
@@ -1290,7 +1351,9 @@ const Dashboard: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-8 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-red-400">My Complaints</h2>
+              <h2 className="text-2xl font-bold text-green-400">
+                My Complaints
+              </h2>
               <div className="flex items-center space-x-4">
                 <button
                   onClick={handleOpenCreateTicketModal}
@@ -1311,7 +1374,7 @@ const Dashboard: React.FC = () => {
               <div className="text-center py-8">
                 <div className="flex flex-col items-center space-y-4">
                   <svg
-                    className="animate-spin h-8 w-8 text-red-400"
+                    className="animate-spin h-8 w-8 text-green-400"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -1330,17 +1393,17 @@ const Dashboard: React.FC = () => {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  <div className="text-red-400 font-medium">
+                  <div className="text-green-400 font-medium">
                     Loading complaints...
                   </div>
                 </div>
               </div>
             ) : ticketsError ? (
               <div className="text-center py-8">
-                <div className="text-red-400 mb-4">{ticketsError}</div>
+                <div className="text-green-400 mb-4">{ticketsError}</div>
                 <button
                   onClick={fetchUserTickets}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg"
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
                 >
                   Retry
                 </button>
@@ -1432,7 +1495,7 @@ const Dashboard: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-red-400">
+              <h2 className="text-2xl font-bold text-green-400">
                 Submit Complaint
               </h2>
               <button
@@ -1444,6 +1507,43 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="space-y-6">
+              {/* Booking Reference */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Booking Reference
+                </label>
+                <select
+                  value={ticketForm.bookingReference}
+                  onChange={(e) =>
+                    handleTicketFormChange("bookingReference", e.target.value)
+                  }
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-400"
+                >
+                  <option value="" disabled hidden>
+                    Select a booking reference
+                  </option>
+                  {bookingsLoading ? (
+                    <option value="" disabled>
+                      Loading bookings...
+                    </option>
+                  ) : userBookings.length === 0 ? (
+                    <option value="" disabled>
+                      No bookings found
+                    </option>
+                  ) : (
+                    userBookings.map((booking) => (
+                      <option
+                        key={booking.bookingId}
+                        value={booking.referenceCode}
+                      >
+                        {booking.referenceCode} - {booking.bookingDate}{" "}
+                        {booking.slotTime} ({booking.status})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
               {/* Subject */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1456,7 +1556,7 @@ const Dashboard: React.FC = () => {
                     handleTicketFormChange("subject", e.target.value)
                   }
                   placeholder="Brief description of the issue"
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-400"
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-400"
                 />
               </div>
 
@@ -1472,7 +1572,7 @@ const Dashboard: React.FC = () => {
                   }
                   placeholder="Detailed description of the issue..."
                   rows={4}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-400"
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-400"
                 />
               </div>
 
@@ -1486,7 +1586,7 @@ const Dashboard: React.FC = () => {
                   onChange={(e) =>
                     handleTicketFormChange("priority", e.target.value)
                   }
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-400"
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-400"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -1504,7 +1604,7 @@ const Dashboard: React.FC = () => {
                   onChange={(e) =>
                     handleTicketFormChange("category", e.target.value)
                   }
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-400"
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-400"
                 >
                   <option value="technical">Technical Issue</option>
                   <option value="billing">Billing</option>
@@ -1525,7 +1625,7 @@ const Dashboard: React.FC = () => {
                     handleTicketFormChange("bikeId", e.target.value)
                   }
                   placeholder="e.g., GYRO-1006"
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-400"
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-400"
                 />
               </div>
 
@@ -1576,8 +1676,16 @@ const Dashboard: React.FC = () => {
               <div className="flex space-x-4 pt-4">
                 <button
                   onClick={handleCreateTicket}
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:opacity-50"
-                  disabled={createTicketLoading}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:opacity-50"
+                  disabled={
+                    createTicketLoading ||
+                    !ticketForm.bookingReference ||
+                    !ticketForm.subject ||
+                    !ticketForm.description ||
+                    !ticketForm.priority ||
+                    !ticketForm.category ||
+                    userBookings.length === 0
+                  }
                 >
                   {createTicketLoading ? "Submitting..." : "Submit Complaint"}
                 </button>

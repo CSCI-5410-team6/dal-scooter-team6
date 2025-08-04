@@ -106,12 +106,15 @@ function HomePage() {
   const [createTicketLoading, setCreateTicketLoading] = useState(false);
   const [createTicketError, setCreateTicketError] = useState("");
   const [createTicketSuccess, setCreateTicketSuccess] = useState("");
+  const [userBookings, setUserBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
   const [ticketForm, setTicketForm] = useState({
     subject: "",
     description: "",
     priority: "medium",
     category: "general",
     bikeId: "",
+    bookingReference: "",
   });
 
   const navigate = useNavigate();
@@ -317,7 +320,10 @@ function HomePage() {
       priority: "medium",
       category: "general",
       bikeId: "",
+      bookingReference: "",
     });
+    // Fetch user bookings for the dropdown
+    fetchUserBookings();
   };
 
   const handleCloseCreateTicketModal = () => {
@@ -343,8 +349,15 @@ function HomePage() {
 
   // Fetch user tickets
   const fetchUserTickets = useCallback(async () => {
-    if (!isUserLoggedIn()) return;
+    console.log("HomePage: fetchUserTickets called");
+    console.log("HomePage: isUserLoggedIn():", isUserLoggedIn());
 
+    if (!isUserLoggedIn()) {
+      console.log("HomePage: User not logged in, returning early");
+      return;
+    }
+
+    console.log("HomePage: User is logged in, proceeding with API call");
     setTicketsLoading(true);
     setTicketsError("");
     try {
@@ -355,35 +368,48 @@ function HomePage() {
       );
       const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
 
+      console.log("HomePage: idTokenKey:", idTokenKey);
+      console.log("HomePage: idToken exists:", !!idToken);
+
       if (!idToken) {
         throw new Error("ID token not found. Please log in again.");
       }
 
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.TICKETS.GET_USER_TICKETS}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: idToken,
-          },
-        }
-      );
+      const apiUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.TICKETS.GET_USER_TICKETS}`;
+      console.log("HomePage: Making API call to:", apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: idToken,
+        },
+      });
+
+      console.log("HomePage: API response status:", response.status);
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log("Fetched user tickets:", data);
+      console.log("HomePage: Fetched user tickets:", data);
       setUserTickets(data.tickets || []);
     } catch (err: any) {
-      console.error("Failed to fetch user tickets:", err.message);
+      console.error("HomePage: Failed to fetch user tickets:", err.message);
       setTicketsError(err.message || "Failed to fetch tickets");
     } finally {
       setTicketsLoading(false);
     }
   }, []);
+
+  // Load user tickets on component mount if user is logged in
+  useEffect(() => {
+    if (isUserLoggedIn()) {
+      console.log("HomePage: User is logged in, fetching user tickets...");
+      fetchUserTickets();
+    }
+  }, [fetchUserTickets]);
 
   // Create ticket
   const createTicket = useCallback(
@@ -433,6 +459,7 @@ function HomePage() {
             priority: "medium",
             category: "general",
             bikeId: "",
+            bookingReference: "",
           });
         }, 2000);
 
@@ -447,6 +474,48 @@ function HomePage() {
     },
     [fetchUserTickets]
   );
+
+  // Fetch user bookings for complaint form dropdown
+  const fetchUserBookings = useCallback(async () => {
+    setBookingsLoading(true);
+    try {
+      const idTokenKey = Object.keys(localStorage).find(
+        (key) =>
+          key.includes("CognitoIdentityServiceProvider") &&
+          key.includes("idToken")
+      );
+      const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+      if (!idToken) {
+        console.log("No ID token found, skipping user bookings fetch");
+        return;
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.BOOKINGS.GET_USER_BOOKINGS}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: idToken,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Fetched user bookings:", data);
+      setUserBookings(data.bookings || []);
+    } catch (err: any) {
+      console.error("Failed to fetch user bookings:", err.message);
+      // Don't set error state as this is optional for the complaint form
+    } finally {
+      setBookingsLoading(false);
+    }
+  }, []);
 
   // Ticket helper functions
   const getTicketPriorityColor = (priority: string) => {
@@ -961,21 +1030,7 @@ function HomePage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Star className="h-5 w-5 text-yellow-400" />
-                  <span className="text-sm text-gray-300">
-                    {bikes.length > 0
-                      ? (() => {
-                          const totalRating = Object.values(bikeRatings).reduce(
-                            (sum, rating) => sum + rating,
-                            0
-                          );
-                          const averageRating =
-                            totalRating / Object.keys(bikeRatings).length;
-                          return averageRating > 0
-                            ? `${averageRating.toFixed(1)} Rating`
-                            : "4.8 Rating";
-                        })()
-                      : "4.8 Rating"}
-                  </span>
+                  <span className="text-sm text-gray-300">4.7 Rating</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Clock className="h-5 w-5 text-blue-400" />
@@ -1752,7 +1807,7 @@ function HomePage() {
                 availabilityData.availableSlots.length > 0 ? (
                 <div>
                   <h3 className="text-lg font-semibold text-white mb-4">
-                    Select Time Slot (Single Booking)
+                    Select Time Slot
                   </h3>
                   {selectedSlots.length > 0 && (
                     <div className="mb-4 p-3 bg-green-900/30 border border-green-500 rounded-lg">
@@ -1839,9 +1894,7 @@ function HomePage() {
                   disabled={bookingLoading || selectedSlots.length === 0}
                   className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none"
                 >
-                  {bookingLoading
-                    ? "Submitting Request..."
-                    : "Confirm Single Booking"}
+                  {bookingLoading ? "Submitting Request..." : "Confirm Booking"}
                 </button>
                 <button
                   onClick={handleCloseBookingModal}
@@ -1880,6 +1933,43 @@ function HomePage() {
             </div>
 
             <div className="space-y-6">
+              {/* Booking Reference */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Booking Reference
+                </label>
+                <select
+                  value={ticketForm.bookingReference}
+                  onChange={(e) =>
+                    handleTicketFormChange("bookingReference", e.target.value)
+                  }
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+                >
+                  <option value="" disabled hidden>
+                    Select a booking reference
+                  </option>
+                  {bookingsLoading ? (
+                    <option value="" disabled>
+                      Loading bookings...
+                    </option>
+                  ) : userBookings.length === 0 ? (
+                    <option value="" disabled>
+                      No bookings found
+                    </option>
+                  ) : (
+                    userBookings.map((booking) => (
+                      <option
+                        key={booking.bookingId}
+                        value={booking.referenceCode}
+                      >
+                        {booking.referenceCode} - {booking.bookingDate}{" "}
+                        {booking.slotTime} ({booking.status})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
               {/* Subject */}
               <div>
                 <label className="block text-sm font-medium text-white mb-2">
@@ -1949,6 +2039,22 @@ function HomePage() {
                 </select>
               </div>
 
+              {/* Bike ID (Optional) */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Bike ID (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={ticketForm.bikeId}
+                  onChange={(e) =>
+                    handleTicketFormChange("bikeId", e.target.value)
+                  }
+                  placeholder="e.g., GYRO-1006"
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500"
+                />
+              </div>
+
               {/* Error/Success Messages */}
               {createTicketError && (
                 <div className="bg-red-900/50 border border-red-500 rounded-lg p-4">
@@ -1996,7 +2102,15 @@ function HomePage() {
               <div className="flex space-x-4 pt-4">
                 <button
                   onClick={handleCreateTicket}
-                  disabled={createTicketLoading}
+                  disabled={
+                    createTicketLoading ||
+                    !ticketForm.bookingReference ||
+                    !ticketForm.subject ||
+                    !ticketForm.description ||
+                    !ticketForm.priority ||
+                    !ticketForm.category ||
+                    userBookings.length === 0
+                  }
                   className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none"
                 >
                   {createTicketLoading ? "Submitting..." : "Submit Complaint"}

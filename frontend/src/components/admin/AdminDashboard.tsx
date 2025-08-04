@@ -184,6 +184,13 @@ const AdminDashboard: React.FC = () => {
     bikeId: "",
   });
 
+  // Ticket resolution state
+  const [resolutionForm, setResolutionForm] = useState({
+    message: "",
+  });
+  const [resolveTicketLoading, setResolveTicketLoading] = useState(false);
+  const [resolveTicketError, setResolveTicketError] = useState("");
+
   const navigate = useNavigate();
 
   // Fetch pending bookings
@@ -1218,7 +1225,73 @@ const AdminDashboard: React.FC = () => {
   const handleCloseTicketDetailModal = () => {
     setShowTicketDetailModal(false);
     setSelectedTicket(null);
+    setResolutionForm({ message: "" });
+    setResolveTicketError("");
   };
+
+  // Resolve ticket function
+  const handleResolveTicket = useCallback(
+    async (ticketId: string) => {
+      setResolveTicketLoading(true);
+      setResolveTicketError("");
+      try {
+        const idTokenKey = Object.keys(localStorage).find(
+          (key) =>
+            key.includes("CognitoIdentityServiceProvider") &&
+            key.includes("idToken")
+        );
+        const idToken = idTokenKey ? localStorage.getItem(idTokenKey) : null;
+
+        if (!idToken) {
+          throw new Error("ID token not found. Please log in again.");
+        }
+
+        const response = await fetch(
+          `${API_CONFIG.BASE_URL}${API_CONFIG.TICKETS.GET_BY_ID(ticketId)}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: idToken,
+            },
+            body: JSON.stringify({
+              status: "resolved",
+              message: resolutionForm.message,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Ticket resolved:", data);
+
+        // Show success toast notification
+        toast.success("Ticket resolved successfully!", {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+
+        // Close modal and refresh tickets
+        setShowTicketDetailModal(false);
+        setSelectedTicket(null);
+        setResolutionForm({ message: "" });
+        fetchAllTickets();
+      } catch (err: any) {
+        console.error("Failed to resolve ticket:", err.message);
+        setResolveTicketError(err.message || "Failed to resolve ticket");
+      } finally {
+        setResolveTicketLoading(false);
+      }
+    },
+    [resolutionForm.message, fetchAllTickets]
+  );
 
   const getTicketPriorityColor = (priority: string) => {
     switch (priority.toLowerCase()) {
@@ -3422,72 +3495,114 @@ const AdminDashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {filteredTickets.map((ticket) => (
-                    <div
-                      key={ticket.ticketId}
-                      onClick={() => getTicketById(ticket.ticketId)}
-                      className="bg-gray-900 rounded-xl p-6 border border-gray-700 hover:border-gray-600 hover:bg-gray-800 transition-all duration-300 transform hover:scale-105 cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-xl font-semibold text-white">
-                            {ticket.subject}
-                          </h3>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-gray-400">
-                            {formatDate(ticket.createdAt)}
+                  {filteredTickets.map((ticket) => {
+                    // Check if current admin can resolve this ticket
+                    const userDataKey = Object.keys(localStorage).find((key) =>
+                      key.endsWith(".userData")
+                    );
+                    let currentAdminEmail = "";
+                    if (userDataKey) {
+                      const userDataStr = localStorage.getItem(userDataKey);
+                      if (userDataStr) {
+                        try {
+                          const userData = JSON.parse(userDataStr);
+                          const attrs = userData.UserAttributes || [];
+                          const emailAttr = attrs.find(
+                            (a: any) => a.Name === "email"
+                          );
+                          currentAdminEmail = emailAttr ? emailAttr.Value : "";
+                        } catch (e) {
+                          console.error("Error parsing user data:", e);
+                        }
+                      }
+                    }
+
+                    const isAssignedToMe =
+                      ticket.assignedToEmail === currentAdminEmail;
+                    const isReadOnly =
+                      ticket.status === "resolved" || !isAssignedToMe;
+
+                    return (
+                      <div
+                        key={ticket.ticketId}
+                        onClick={() => getTicketById(ticket.ticketId)}
+                        className={`rounded-xl p-6 border transition-all duration-300 ${
+                          isReadOnly
+                            ? "bg-gray-800 border-gray-600 cursor-pointer opacity-75"
+                            : "bg-gray-900 border-gray-700 hover:border-gray-600 hover:bg-gray-800 transform hover:scale-105 cursor-pointer"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-xl font-semibold text-white">
+                              {ticket.subject}
+                            </h3>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-400">
+                              {formatDate(ticket.createdAt)}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="space-y-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-gray-300">Category:</span>
-                          <span className="text-green-400 font-medium">
-                            {ticket.category}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-gray-300">Priority:</span>
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTicketPriorityColor(
-                              ticket.priority
-                            )}`}
-                          >
-                            {ticket.priority}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-gray-300">Status:</span>
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTicketStatusColor(
-                              ticket.status
-                            )}`}
-                          >
-                            {ticket.status}
-                          </span>
-                        </div>
-                        {ticket.bikeId && (
+                        <div className="space-y-3">
                           <div className="flex items-center space-x-2">
-                            <span className="text-gray-300">Bike:</span>
-                            <span className="text-blue-400 font-medium">
-                              {ticket.bikeId}
+                            <span className="text-gray-300">Category:</span>
+                            <span className="text-green-400 font-medium">
+                              {ticket.category}
                             </span>
                           </div>
-                        )}
-                        <div className="text-gray-300">
-                          {ticket.description?.substring(0, 80)}...
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-300">Priority:</span>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${getTicketPriorityColor(
+                                ticket.priority
+                              )}`}
+                            >
+                              {ticket.priority}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-300">Status:</span>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${getTicketStatusColor(
+                                ticket.status
+                              )}`}
+                            >
+                              {ticket.status}
+                            </span>
+                          </div>
+                          {ticket.bikeId && (
+                            <div className="flex items-center space-x-2">
+                              <span className="text-gray-300">Bike:</span>
+                              <span className="text-blue-400 font-medium">
+                                {ticket.bikeId}
+                              </span>
+                            </div>
+                          )}
+                          {ticket.assignedToEmail && (
+                            <div className="flex items-center space-x-2">
+                              <span className="text-gray-300">
+                                Assigned To:
+                              </span>
+                              <span className="text-purple-400 font-medium">
+                                {ticket.assignedToEmail}
+                              </span>
+                            </div>
+                          )}
+                          <div className="text-gray-300">
+                            {ticket.description?.substring(0, 80)}...
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="mt-4 pt-3 border-t border-gray-700">
-                        <div className="text-xs text-gray-400">
-                          ID: {ticket.ticketId}
+                        <div className="mt-4 pt-3 border-t border-gray-700">
+                          <div className="text-xs text-gray-400">
+                            ID: {ticket.ticketId}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -4380,6 +4495,14 @@ const AdminDashboard: React.FC = () => {
                         {selectedTicket.username || selectedTicket.userId}
                       </span>
                     </div>
+                    {selectedTicket.assignedToEmail && (
+                      <div>
+                        <span className="text-gray-400">Assigned To:</span>
+                        <span className="text-white ml-2">
+                          {selectedTicket.assignedToEmail}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -4394,6 +4517,155 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Resolution Form - Only show if ticket is not resolved and admin is assigned */}
+              {selectedTicket.status !== "resolved" &&
+                selectedTicket.assignedToEmail && (
+                  <div className="border-t border-gray-700 pt-6">
+                    <h4 className="text-lg font-semibold text-gray-300 mb-3">
+                      Resolve Ticket
+                    </h4>
+
+                    {/* Check if current admin can resolve this ticket */}
+                    {(() => {
+                      const userDataKey = Object.keys(localStorage).find(
+                        (key) => key.endsWith(".userData")
+                      );
+                      let currentAdminEmail = "";
+                      if (userDataKey) {
+                        const userDataStr = localStorage.getItem(userDataKey);
+                        if (userDataStr) {
+                          try {
+                            const userData = JSON.parse(userDataStr);
+                            const attrs = userData.UserAttributes || [];
+                            const emailAttr = attrs.find(
+                              (a: any) => a.Name === "email"
+                            );
+                            currentAdminEmail = emailAttr
+                              ? emailAttr.Value
+                              : "";
+                          } catch (e) {
+                            console.error("Error parsing user data:", e);
+                          }
+                        }
+                      }
+
+                      const canResolve =
+                        currentAdminEmail === selectedTicket.assignedToEmail;
+
+                      if (!canResolve) {
+                        return (
+                          <div className="bg-yellow-900/50 border border-yellow-500 rounded-lg p-4">
+                            <div className="flex items-center space-x-2">
+                              <svg
+                                className="w-5 h-5 text-yellow-400"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                              <span className="text-yellow-400 font-medium">
+                                Only the assigned admin (
+                                {selectedTicket.assignedToEmail}) can resolve
+                                this ticket.
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Resolution Message *
+                            </label>
+                            <textarea
+                              value={resolutionForm.message}
+                              onChange={(e) =>
+                                setResolutionForm((prev) => ({
+                                  ...prev,
+                                  message: e.target.value,
+                                }))
+                              }
+                              placeholder="Describe how the issue was resolved..."
+                              rows={4}
+                              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-400"
+                            />
+                          </div>
+
+                          {resolveTicketError && (
+                            <div className="bg-red-900/50 border border-red-500 rounded-lg p-4">
+                              <div className="flex items-center space-x-2">
+                                <svg
+                                  className="w-5 h-5 text-red-400"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                                <span className="text-red-400 font-medium">
+                                  Error: {resolveTicketError}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex space-x-4">
+                            <button
+                              onClick={() =>
+                                handleResolveTicket(selectedTicket.ticketId)
+                              }
+                              disabled={
+                                resolveTicketLoading ||
+                                !resolutionForm.message.trim()
+                              }
+                              className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:transform-none flex items-center justify-center space-x-2"
+                            >
+                              {resolveTicketLoading ? (
+                                <>
+                                  <svg
+                                    className="animate-spin h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
+                                  </svg>
+                                  <span>Resolving...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="h-4 w-4" />
+                                  <span>Resolve Ticket</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
 
               {/* Action Buttons */}
               <div className="flex space-x-4 pt-6">
