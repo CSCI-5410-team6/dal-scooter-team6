@@ -8,7 +8,7 @@ from decimal import Decimal
 dynamodb = boto3.resource('dynamodb')
 feedback_table = dynamodb.Table(os.environ['FEEDBACK_TABLE'])
 bikes_table = dynamodb.Table(os.environ['BIKES_TABLE'])
-
+comprehend = boto3.client('comprehend')
 def lambda_handler(event, context):
     try:
         # Auth: Cognito customer only
@@ -39,6 +39,7 @@ def lambda_handler(event, context):
 
         # Optionally: perform sentiment analysis on comment (placeholder)
         # sentiment = analyze_sentiment(comment)
+        sentiment_data = analyze_sentiment(comment)
 
         feedback_id = str(uuid.uuid4())
         submitted_at = datetime.utcnow().isoformat() + "Z"
@@ -51,7 +52,8 @@ def lambda_handler(event, context):
             "rating": Decimal(str(rating)),
             "comment": comment,
             "bikeType": bike_type,
-            "submittedAt": submitted_at
+            "submittedAt": submitted_at,
+            "sentiment": sentiment_data["sentiment"]
         }
         
         feedback_table.put_item(Item=item)
@@ -60,11 +62,43 @@ def lambda_handler(event, context):
             "message": "Feedback submitted successfully", 
             "feedbackId": feedback_id,
             "userId": user_id,
-            "bikeId": bike_id
+            "bikeId": bike_id,
+            "sentiment": sentiment_data["sentiment"]
         })
         
     except Exception as e:
         return response(500, {"error": str(e)})
+def analyze_sentiment(text):
+    """
+    Analyze sentiment of the given text using AWS Comprehend
+    Returns only sentiment (POSITIVE, NEGATIVE, NEUTRAL, MIXED)
+    """
+    try:
+        # Skip sentiment analysis if comment is empty
+        if not text or text.strip() == "":
+            return {
+                "sentiment": "NEUTRAL"
+            }
+        
+        # Call AWS Comprehend to detect sentiment
+        response = comprehend.detect_sentiment(
+            Text=text,
+            LanguageCode='en'  # Assuming English text
+        )
+        
+        # Extract only sentiment, ignore scores
+        sentiment = response['Sentiment']
+        
+        return {
+            "sentiment": sentiment
+        }
+        
+    except Exception as e:
+        # If sentiment analysis fails, default to NEUTRAL
+        print(f"Sentiment analysis failed: {str(e)}")
+        return {
+            "sentiment": "NEUTRAL"
+        }
 
 def response(status, body):
     return {

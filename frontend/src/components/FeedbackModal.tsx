@@ -11,6 +11,7 @@ interface Feedback {
   bikeType: string;
   submittedAt: string;
   username?: string; // Optional username field
+  sentiment?: string; // Optional sentiment field
 }
 
 interface FeedbackModalProps {
@@ -186,6 +187,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({
           );
         }
       );
+      console.log("line number 189 - sortedFeedbacks:", sortedFeedbacks);
       setFeedbacks(sortedFeedbacks);
       setAverageRating(data.averageRating || 0);
     } catch (err: any) {
@@ -340,6 +342,31 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const renderSentimentTag = (sentiment: string) => {
+    const sentimentConfig = {
+      POSITIVE: {
+        color: "bg-green-500 text-white",
+        text: "Positive"
+      },
+      NEGATIVE: {
+        color: "bg-red-500 text-white",
+        text: "Negative"
+      },
+      NEUTRAL: {
+        color: "bg-blue-500 text-white",
+        text: "Neutral"
+      }
+    };
+
+    const config = sentimentConfig[sentiment as keyof typeof sentimentConfig] || sentimentConfig.NEUTRAL;
+
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
+        {config.text}
+      </span>
+    );
   };
 
   const renderStars = (
@@ -621,6 +648,9 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({
                                 {feedback.username ||
                                   `User ${feedback.userId.slice(-8)}`}
                               </span>
+                              {feedback.sentiment && (
+                                renderSentimentTag(feedback.sentiment)
+                              )}
                             </div>
                             <div className="flex items-center space-x-2">
                               <span className="text-xs text-gray-500">
