@@ -63,7 +63,10 @@ module "api_gateway" {
   sns_topic_arn                 = module.sns.sns_topic_arn
   booking_requests_queue_url    = module.sns.booking_requests_queue_url
   booking_requests_queue_arn    = module.sns.booking_requests_queue_arn
+  ticket_assignment_sns_topic_arn = module.sns.ticket_assignment_sns_topic_arn
+  ticket_processing_queue_arn     = module.sns.ticket_processing_queue_arn
 }
+
 
 variable "environment" {
   description = "The environment name (e.g., dev, prod)"
