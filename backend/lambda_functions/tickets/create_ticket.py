@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 
 dynamodb = boto3.resource('dynamodb')
+sns = boto3.client('sns')
 tickets_table = dynamodb.Table(os.environ.get('TICKETS_TABLE', 'tickets-table-dev'))
 
 def lambda_handler(event, context):
@@ -29,6 +30,7 @@ def lambda_handler(event, context):
         priority = body.get("priority", "medium")  # low, medium, high
         category = body.get("category", "general")  # general, technical, billing, etc.
         bike_id = body.get("bikeId", "")  # optional
+        booking_reference = body.get("bookingReference", "")  # Add booking reference
 
         # Validate required fields
         if not subject or not description:
@@ -53,6 +55,7 @@ def lambda_handler(event, context):
             "priority": priority,
             "category": category,
             "bikeId": bike_id,
+            "bookingReference": booking_reference,
             "status": "open",
             "createdAt": datetime.utcnow().isoformat(),
             "updatedAt": datetime.utcnow().isoformat()
@@ -60,6 +63,32 @@ def lambda_handler(event, context):
 
         # Put item in DynamoDB
         tickets_table.put_item(Item=ticket_item)
+
+        # Publish message to SNS for ticket assignment
+        try:
+            sns_topic_arn = os.environ.get('TICKET_SNS_TOPIC_ARN')
+            if sns_topic_arn:
+                message = {
+                    "action": "NEW_TICKET",  
+                    "ticketId": ticket_id,
+                    "bookingReference": booking_reference,
+                    "priority": priority,
+                    "category": category,
+                    "userId": user_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                
+                sns.publish(
+                    TopicArn=sns_topic_arn,
+                    Message=json.dumps(message),
+                    Subject=f"New Ticket Assignment Required: {ticket_id}"
+                )
+                print(f"Published ticket assignment message for {ticket_id}")
+            else:
+                print("Warning: TICKET_SNS_TOPIC_ARN not configured")
+        except Exception as sns_error:
+            print(f"Warning: Failed to publish SNS message: {str(sns_error)}")
+            # Don't fail the entire request if SNS publishing fails
 
         return response(201, {
             "message": "Ticket created successfully",
