@@ -225,12 +225,25 @@ const AdminDashboard: React.FC = () => {
       }
 
       const data = await response.json();
-      // Filter only pending approval bookings
+      console.log("DEBUG: All bookings data:", data);
+      console.log("DEBUG: Bookings array:", data.bookings);
+
+      if (data.bookings && data.bookings.length > 0) {
+        console.log(
+          "DEBUG: All booking statuses:",
+          data.bookings.map((b: any) => b.status)
+        );
+      }
+
+      // Filter only REQUESTED bookings (pending approval)
       const pending = data.bookings
-        ? data.bookings.filter(
-            (booking: any) => booking.status === "PENDING_APPROVAL"
-          )
+        ? data.bookings.filter((booking: any) => {
+            console.log("DEBUG: Booking status:", booking.status);
+            return booking.status === "REQUESTED";
+          })
         : [];
+
+      console.log("DEBUG: Filtered pending bookings:", pending);
       setPendingBookings(pending);
     } catch (err: any) {
       setPendingBookingsError(
@@ -3064,7 +3077,7 @@ const AdminDashboard: React.FC = () => {
                               {booking.bikeId}
                             </h3>
                             <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-500 text-white">
-                              PENDING_APPROVAL
+                              Pending Approval
                             </span>
                           </div>
                           <div className="text-right">
