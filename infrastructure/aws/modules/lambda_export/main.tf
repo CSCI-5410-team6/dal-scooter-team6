@@ -19,7 +19,6 @@ data "aws_iam_policy_document" "assume_role" {
   }
 }
 
-# --- ✅ ADDITIONAL POLICY to fix AccessDenied ---
 data "aws_iam_policy_document" "lambda_policy_doc" {
   statement {
     sid       = "AllowDynamoDBScan"
