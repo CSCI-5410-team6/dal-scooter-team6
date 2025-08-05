@@ -3801,15 +3801,14 @@ const AdminDashboard: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/*  */}
                     <iframe
-  width="1050"
-  height="450"
-  src="https://lookerstudio.google.com/embed/reporting/7f1913e5-28bf-4c48-a02a-07c9e3a98af7/page/GSeTF"
-  frameBorder="0"
-  allowFullScreen
-  sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-  style={{ border: 0 }}
-></iframe>
-
+                      width="1050"
+                      height="450"
+                      src="https://lookerstudio.google.com/embed/reporting/7f1913e5-28bf-4c48-a02a-07c9e3a98af7/page/GSeTF"
+                      frameBorder="0"
+                      allowFullScreen
+                      sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                      style={{ border: 0 }}
+                    ></iframe>
                   </div>
                 </div>
               )}
