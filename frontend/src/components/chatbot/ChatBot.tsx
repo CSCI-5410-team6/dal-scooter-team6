@@ -1,23 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LexRuntimeV2Client, RecognizeTextCommand } from '@aws-sdk/client-lex-runtime-v2';
-import { useAuthContext } from '../../contextStore/AuthContext';
 import { lexConfig } from '../../config/amplifyConfig';
 import { getCredentials } from '../../utils/credentials';
+import { AwsCredentialIdentity } from '@aws-sdk/types';
 import { Bot, User, Send, MessageCircle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const lexClient = new LexRuntimeV2Client({
   region: lexConfig.region,
-  credentials: getCredentials
+  credentials: async (): Promise<AwsCredentialIdentity> => {
+    const { credentials } = await getCredentials();
+
+    if (
+      !credentials.AccessKeyId ||
+      !credentials.SecretKey ||
+      !credentials.SessionToken
+    ) {
+      throw new Error("Incomplete AWS credentials");
+    }
+
+    return {
+      accessKeyId: credentials.AccessKeyId,
+      secretAccessKey: credentials.SecretKey,
+      sessionToken: credentials.SessionToken,
+    };
+  },
 });
 
 const ChatBot: React.FC = () => {
-  const authContext = useAuthContext() || {};
-  const { cognitoUser } = authContext;
-
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { sender: 'bot', text: "Hi! I'm your E-Ride assistant. How can I help you today?"},
+    { sender: 'bot', text: "Hi! I'm your E-Ride assistant. How can I help you today?" }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,37 +42,8 @@ const ChatBot: React.FC = () => {
   }, [messages]);
 
   const sendLexRequest = async (text: string) => {
-    const userId = cognitoUser?.username || `guest-${Math.random().toString(36).substring(2)}`;
-    const userType = cognitoUser?.attributes?.['custom:userType'] || 'guest';
-
-    let intentName = 'FallbackIntent';
-    let slots = {};
-
-    if (text.toLowerCase().includes('navigate')) {
-      intentName = 'NavigationIntent';
-      slots = {
-        Location: {
-          value: { interpretedValue: text.replace(/navigate\s*/i, '').trim() || '/' }
-        }
-      };
-    } else if (text.toLowerCase().includes('bike code') || text.toLowerCase().includes('booking')) {
-      intentName = 'BookingIntent';
-      slots = {
-        BookingAction: {
-          value: { interpretedValue: 'retrieve' }
-        },
-        BookingId: {
-          value: { interpretedValue: text.match(/[a-z0-9-]{4,}/i)?.[0] || undefined }
-        }
-      };
-    } else if (text.toLowerCase().includes('support')) {
-      intentName = 'SupportIntent';
-      slots = {
-        BookingReference: {
-          value: { interpretedValue: text.match(/[a-z0-9-]{4,}/i)?.[0] || 'unknown' }
-        }
-      };
-    }
+    const { credentials, identityId, userType } = await getCredentials();
+    const userId = identityId || `guest-${Math.random().toString(36).substring(2)}`;
 
     const command = new RecognizeTextCommand({
       botId: lexConfig.botId,
@@ -68,19 +52,19 @@ const ChatBot: React.FC = () => {
       sessionId: userId,
       text,
       sessionState: {
-        sessionAttributes: { userId, userType },
-        intent: { name: intentName, slots }
+        sessionAttributes: {
+          userId,
+          userType,
+        }
       }
     });
 
     const response = await lexClient.send(command);
+    const reply = response.messages?.[0]?.content || 'No response.';
+    const match = reply.match(/navigating to (\w+)/i);
+    const location = match?.[1];
 
-    const interpretedValue = response.sessionState?.intent?.slots?.Location?.value?.interpretedValue;
-
-    return {
-      reply: response.messages?.[0]?.content || 'No response.',
-      location: interpretedValue
-    };
+    return { reply, location };
   };
 
   const handleSend = async (e: any) => {
@@ -97,7 +81,6 @@ const ChatBot: React.FC = () => {
 
       if (location) {
         const target = location.toLowerCase();
-
         if (['home', '/'].includes(target)) {
           navigate('/');
         } else if (['about', 'faq', 'service'].includes(target)) {
@@ -113,7 +96,7 @@ const ChatBot: React.FC = () => {
         }
       }
     } catch (err) {
-      console.log("error", err);
+      console.error('error', err);
       setMessages((prev) => [...prev, { sender: 'bot', text: 'Error talking to assistant.' }]);
     } finally {
       setInput('');
@@ -123,7 +106,6 @@ const ChatBot: React.FC = () => {
 
   return (
     <>
-      {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg transition-all duration-300 transform hover:scale-110 ${
@@ -137,10 +119,8 @@ const ChatBot: React.FC = () => {
         )}
       </button>
 
-      {/* Chat Widget */}
       {isOpen && (
         <div className="fixed bottom-24 right-6 z-40 w-80 h-96 bg-gray-800 rounded-lg shadow-2xl border border-gray-700 flex flex-col overflow-hidden">
-          {/* Header */}
           <div className="bg-green-500 p-4 flex items-center space-x-3">
             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
               <Bot className="w-5 h-5 text-green-500" />
@@ -151,13 +131,9 @@ const ChatBot: React.FC = () => {
             </div>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.sender === 'bot' ? 'justify-start' : 'justify-end'}`}
-              >
+              <div key={i} className={`flex ${m.sender === 'bot' ? 'justify-start' : 'justify-end'}`}>
                 <div className={`flex items-start space-x-2 max-w-xs ${m.sender === 'bot' ? '' : 'flex-row-reverse space-x-reverse'}`}>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
                     m.sender === 'bot' ? 'bg-green-500' : 'bg-blue-500'
@@ -183,7 +159,6 @@ const ChatBot: React.FC = () => {
             <div ref={chatEndRef} />
           </div>
 
-          {/* Input */}
           <form onSubmit={handleSend} className="p-4 border-t border-gray-700">
             <div className="flex space-x-2">
               <input
