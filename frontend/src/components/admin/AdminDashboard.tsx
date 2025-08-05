@@ -3799,82 +3799,16 @@ const AdminDashboard: React.FC = () => {
 
                   {/* Additional Analytics */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Recent Bookings */}
-                    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-                      <h3 className="text-lg font-semibold mb-4">
-                        Recent Bookings
-                      </h3>
-                      <div className="space-y-3">
-                        {analyticsData.recentBookings
-                          ?.slice(0, 5)
-                          .map((booking: any, index: number) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
-                            >
-                              <div>
-                                <p className="text-white font-medium">
-                                  {booking.bikeId}
-                                </p>
-                                <p className="text-gray-400 text-sm">
-                                  {formatDate(booking.bookingDate)}
-                                </p>
-                              </div>
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium ${getBookingStatusColor(
-                                  booking.status
-                                )}`}
-                              >
-                                {booking.status}
-                              </span>
-                            </div>
-                          ))}
-                        {(!analyticsData.recentBookings ||
-                          analyticsData.recentBookings.length === 0) && (
-                          <p className="text-gray-400 text-center py-4">
-                            No recent bookings
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Top Rated Bikes */}
-                    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-                      <h3 className="text-lg font-semibold mb-4">
-                        Top Rated Bikes
-                      </h3>
-                      <div className="space-y-3">
-                        {analyticsData.topRatedBikes
-                          ?.slice(0, 5)
-                          .map((bike: any, index: number) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
-                            >
-                              <div>
-                                <p className="text-white font-medium">
-                                  {bike.bikeId}
-                                </p>
-                                <p className="text-gray-400 text-sm">
-                                  {bike.type}
-                                </p>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <span className="text-yellow-400">★</span>
-                                <span className="text-white font-medium">
-                                  {bike.averageRating?.toFixed(1) || "0.0"}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        {(!analyticsData.topRatedBikes ||
-                          analyticsData.topRatedBikes.length === 0) && (
-                          <p className="text-gray-400 text-center py-4">
-                            No rated bikes
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    {/*  */}
+                    <iframe
+                      width="1050"
+                      height="450"
+                      src="https://lookerstudio.google.com/embed/reporting/7f1913e5-28bf-4c48-a02a-07c9e3a98af7/page/GSeTF"
+                      frameBorder="0"
+                      allowFullScreen
+                      sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                      style={{ border: 0 }}
+                    ></iframe>
                   </div>
                 </div>
               )}
