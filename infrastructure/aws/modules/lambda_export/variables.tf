@@ -32,7 +32,7 @@ variable "s3_bucket_arn" {
 variable "schedule_expression" {
   description = "Cron or rate expression for the EventBridge rule"
   type        = string
-  default     = "rate(1 day)"
+  default     = "rate(7 days)"
 }
 
 variable "lambda_timeout" {

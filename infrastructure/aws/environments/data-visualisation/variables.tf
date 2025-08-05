@@ -16,32 +16,51 @@ variable "project_name" {
   default     = "dal-scooter-team-6"
 }
 
-# S3 bucket used for DynamoDB exports
 variable "export_bucket_name" {
   description = "Name of the S3 bucket that stores exported DynamoDB data"
   type        = string
   default     = "dal-scooter-team-6-data-visualization"
 }
 
-# DynamoDB table you want to export
-variable "dynamodb_table_name" {
+variable "dynamodb_table_name_DALScooterUsers1" {
   description = "Name of the DynamoDB table to export"
   type        = string
-  default     = "bookings-table-dev"
+  default     = "DALScooterUsers1"
 }
 
-# ARN of that DynamoDB table (match the value in your tfstate)
-variable "dynamodb_table_arn" {
+variable "dynamodb_table_name_feedback-table-dev" {
+  description = "Name of the DynamoDB table to export"
+  type        = string
+  default     = "feedback-table-dev"
+}
+
+variable "dynamodb_table_name_bikes_table-dev" {
+  description = "Name of the DynamoDB table to export"
+  type        = string
+  default     = "bikes-table-dev"
+  
+}
+variable "dynamodb_table_arn_DALScooterUsers1" {
   description = "ARN of the DynamoDB table to export"
   type        = string
-  default     = "arn:aws:dynamodb:ca-central-1:796973501829:table/bookings-table-dev"
+  default     = "arn:aws:dynamodb:ca-central-1:796973501829:table/DALScooterUsers1"
 }
 
-# EventBridge schedule expression (change to cron(...) if desired)
+variable "dynamodb_table_arn_feedback-table-dev" {
+  description = "ARN of the feedback DynamoDB table"
+  type        = string
+  default     = "arn:aws:dynamodb:ca-central-1:796973501829:table/feedback-table-dev"
+}
+
+variable "dynamodb_table_arn_bikes_table-dev" {
+  description = "ARN of the bikes DynamoDB table"
+  type        = string
+  default     = "arn:aws:dynamodb:ca-central-1:796973501829:table/bikes-table-dev"
+}
 variable "schedule_expression" {
   description = "Schedule for the export Lambda (rate or cron expression)"
   type        = string
-  default     = "rate(1 day)" 
+  default     = "rate(7 days)" 
 }
 
 variable "lambda_timeout" {

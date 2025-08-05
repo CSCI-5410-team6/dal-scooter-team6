@@ -19,20 +19,24 @@ data "aws_iam_policy_document" "assume_role" {
   }
 }
 
+# --- ✅ ADDITIONAL POLICY to fix AccessDenied ---
 data "aws_iam_policy_document" "lambda_policy_doc" {
   statement {
-    actions   = ["dynamodb:Scan"]
+    sid       = "AllowDynamoDBScan"
+    actions   = ["dynamodb:Scan", "dynamodb:DescribeTable"]
     effect    = "Allow"
     resources = [var.dynamodb_table_arn]
   }
 
   statement {
+    sid       = "AllowS3Put"
     actions   = ["s3:PutObject", "s3:PutObjectAcl"]
     effect    = "Allow"
     resources = ["${coalesce(var.s3_bucket_arn, local.s3_bucket_arn_constructed)}/*"]
   }
 
   statement {
+    sid       = "AllowLogs"
     actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
     effect    = "Allow"
     resources = ["arn:aws:logs:*:*:*"]
@@ -40,7 +44,7 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
 }
 
 resource "aws_iam_role" "lambda_visualization" {
-  name               = "lambda_visualization"
+  name               = "lambda_visualization-${var.function_name}"
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
   tags = {
     Project     = var.project_name
@@ -70,7 +74,7 @@ resource "aws_lambda_function" "this" {
     }
   }
 
-tags = {
+  tags = {
     Project     = var.project_name
     Environment = var.environment
   }
