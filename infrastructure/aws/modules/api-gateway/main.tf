@@ -148,7 +148,10 @@ resource "aws_iam_policy" "lambda_policy" {
         Action = [
           "sns:Publish"
         ]
-        Resource = var.sns_topic_arn
+        Resource = [
+          var.sns_topic_arn,
+          var.ticket_assignment_sns_topic_arn
+        ]
       },
       {
         Effect = "Allow"
@@ -370,10 +373,10 @@ resource "aws_lambda_function" "booking-assigner" {
   source_code_hash = filebase64sha256("../../../../backend/lambda_functions/bookings/booking_assigner.py.zip")
   environment {
     variables = {
-      BOOKINGS_TABLE = "bookings-table-${var.environment}"
-      USERS_TABLE    = "DALScooterUsers1"
-      BIKES_TABLE    = "bikes-table-${var.environment}"
-      SNS_TOPIC_ARN  = var.sns_topic_arn
+      BOOKINGS_TABLE       = "bookings-table-${var.environment}"
+      USERS_TABLE          = "DALScooterUsers1"
+      BIKES_TABLE          = "bikes-table-${var.environment}"
+      SNS_TOPIC_ARN        = var.sns_topic_arn
       COGNITO_USER_POOL_ID = var.cognito_user_pool_id
     }
   }
@@ -477,7 +480,8 @@ resource "aws_lambda_function" "create-ticket" {
   source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/create_ticket.py.zip")
   environment {
     variables = {
-      TICKET_TABLE = "ticket-table-${var.environment}",
+      TICKETS_TABLE = "tickets-table-${var.environment}",
+      TICKET_SNS_TOPIC_ARN = var.ticket_assignment_sns_topic_arn
     }
   }
   tags = local.common_tags
@@ -492,7 +496,49 @@ resource "aws_lambda_function" "get-all-tickets" {
   source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/get_all_tickets.py.zip")
   environment {
     variables = {
-      TICKET_TABLE = "ticket-table-${var.environment}",
+      TICKETS_TABLE = "tickets-table-${var.environment}",
+    }
+  }
+  tags = local.common_tags
+}
+
+# Lambda Function for Ticket Processing (SNS/SQS message processing)
+resource "aws_lambda_function" "ticket-processor" {
+  filename         = "../../../../backend/lambda_functions/tickets/ticket_processor.py.zip"
+  function_name    = "ticket-processor-${var.environment}"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "ticket_processor.lambda_handler"
+  runtime          = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/ticket_processor.py.zip")
+  timeout          = 30
+  environment {
+    variables = {
+      TICKETS_TABLE = "tickets-table-${var.environment}",
+      USERS_TABLE = "DALScooterUsers1"
+    }
+  }
+  tags = local.common_tags
+}
+
+# Event Source Mapping for SQS to Lambda
+resource "aws_lambda_event_source_mapping" "ticket_processor_sqs" {
+  event_source_arn = var.ticket_processing_queue_arn
+  function_name    = aws_lambda_function.ticket-processor.function_name
+  batch_size       = 1
+  enabled          = true
+}
+
+# Lambda Function for Ticket Updates (for franchise operators to respond)
+resource "aws_lambda_function" "update-ticket" {
+  filename         = "../../../../backend/lambda_functions/tickets/update_ticket.py.zip"
+  function_name    = "update-ticket-${var.environment}"
+  role             = aws_iam_role.lambda_execution_role.arn
+  handler          = "update_ticket.lambda_handler"
+  runtime          = "python3.9"
+  source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/update_ticket.py.zip")
+  environment {
+    variables = {
+      TICKETS_TABLE = "tickets-table-${var.environment}"
     }
   }
   tags = local.common_tags
@@ -507,7 +553,7 @@ resource "aws_lambda_function" "get-user-tickets" {
   source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/get_user_tickets.py.zip")
   environment {
     variables = {
-      TICKET_TABLE = "ticket-table-${var.environment}",
+      TICKETS_TABLE = "tickets-table-${var.environment}",
     }
   }
   tags = local.common_tags
@@ -522,7 +568,7 @@ resource "aws_lambda_function" "get-ticket-by-id" {
   source_code_hash = filebase64sha256("../../../../backend/lambda_functions/tickets/get_ticket_by_id.py.zip")
   environment {
     variables = {
-      TICKET_TABLE = "ticket-table-${var.environment}",
+      TICKETS_TABLE = "tickets-table-${var.environment}",
     }
   }
   tags = local.common_tags
@@ -1076,6 +1122,38 @@ resource "aws_api_gateway_integration_response" "booking_reference_code_options_
 }
 
 # ===========================
+# /booking/{referenceCode} (PUT) Endpoint for Approval
+# ===========================
+
+resource "aws_api_gateway_method" "booking_reference_code_put" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.booking_reference_code.id
+  http_method   = "PUT"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+  request_parameters = {
+    "method.request.path.referenceCode" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "booking_reference_code_put" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.booking_reference_code.id
+  http_method             = aws_api_gateway_method.booking_reference_code_put.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:approve-booking-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "booking_reference_code_put" {
+  statement_id  = "AllowAPIGatewayInvokeApproveBooking"
+  action        = "lambda:InvokeFunction"
+  function_name = "approve-booking-${var.environment}"  # Make sure this Lambda exists
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/PUT/booking/*"
+}
+
+# ===========================
 # /booking/admin (GET) Endpoint
 # ===========================
 
@@ -1229,38 +1307,6 @@ resource "aws_api_gateway_integration_response" "booking_user_options_200" {
     "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
   }
   depends_on = [aws_api_gateway_integration.booking_user_options]
-}
-
-# ===========================
-# /booking/{referenceCode} (PUT) Endpoint for Approval
-# ===========================
-
-resource "aws_api_gateway_method" "booking_reference_code_put" {
-  rest_api_id   = aws_api_gateway_rest_api.this.id
-  resource_id   = aws_api_gateway_resource.booking_reference_code.id
-  http_method   = "PUT"
-  authorization = "COGNITO_USER_POOLS"
-  authorizer_id = aws_api_gateway_authorizer.cognito.id
-  request_parameters = {
-    "method.request.path.referenceCode" = true
-  }
-}
-
-resource "aws_api_gateway_integration" "booking_reference_code_put" {
-  rest_api_id             = aws_api_gateway_rest_api.this.id
-  resource_id             = aws_api_gateway_resource.booking_reference_code.id
-  http_method             = aws_api_gateway_method.booking_reference_code_put.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:approve-booking-${var.environment}/invocations"
-}
-
-resource "aws_lambda_permission" "booking_reference_code_put" {
-  statement_id  = "AllowAPIGatewayInvokeApproveBooking"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.approve-booking.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/PUT/booking/*"
 }
 
 # ===========================
@@ -1905,9 +1951,41 @@ resource "aws_api_gateway_integration_response" "tickets_id_options_200" {
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,PUT,OPTIONS'"
   }
   depends_on = [aws_api_gateway_integration.tickets_id_options]
+}
+
+# ===========================
+# /tickets/{ticketId} (PUT) Endpoint for Updates/Responses
+# ===========================
+
+resource "aws_api_gateway_method" "tickets_id_put" {
+  rest_api_id   = aws_api_gateway_rest_api.this.id
+  resource_id   = aws_api_gateway_resource.tickets_id.id
+  http_method   = "PUT"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+  request_parameters = {
+    "method.request.path.ticketId" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "tickets_id_put" {
+  rest_api_id             = aws_api_gateway_rest_api.this.id
+  resource_id             = aws_api_gateway_resource.tickets_id.id
+  http_method             = aws_api_gateway_method.tickets_id_put.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:update-ticket-${var.environment}/invocations"
+}
+
+resource "aws_lambda_permission" "tickets_id_put" {
+  statement_id  = "AllowAPIGatewayInvokeUpdateTicket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.update-ticket.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/PUT/tickets/*"
 }
 
 # --- Deployment ---
@@ -1937,6 +2015,7 @@ resource "aws_api_gateway_deployment" "this" {
     aws_api_gateway_integration_response.booking_options_200,
     
     aws_api_gateway_integration.booking_reference_code_get,
+    aws_api_gateway_integration.booking_reference_code_put,
     aws_api_gateway_integration.booking_reference_code_options,
     aws_api_gateway_integration_response.booking_reference_code_options_200,
     
@@ -1947,9 +2026,6 @@ resource "aws_api_gateway_deployment" "this" {
     aws_api_gateway_integration.booking_user_get,
     aws_api_gateway_integration.booking_user_options,
     aws_api_gateway_integration_response.booking_user_options_200,
-    
-    # Booking approval endpoints
-    aws_api_gateway_integration.booking_reference_code_put,
     
     # Feedback endpoints
     aws_api_gateway_integration.feedback_post,
@@ -1967,8 +2043,8 @@ resource "aws_api_gateway_deployment" "this" {
     aws_api_gateway_integration.feedback_id_put,
     aws_api_gateway_integration.feedback_id_options,
     aws_api_gateway_integration_response.feedback_id_options_200,
-    
-    # Ticket endpoints
+
+    # Ticket endpoints - complete dependency chain
     aws_api_gateway_integration.tickets_post,
     aws_api_gateway_integration.tickets_options,
     aws_api_gateway_integration_response.tickets_options_200,
@@ -1982,6 +2058,7 @@ resource "aws_api_gateway_deployment" "this" {
     aws_api_gateway_integration_response.tickets_user_options_200,
     
     aws_api_gateway_integration.tickets_id_get,
+    aws_api_gateway_integration.tickets_id_put,
     aws_api_gateway_integration.tickets_id_options,
     aws_api_gateway_integration_response.tickets_id_options_200,
   ]
@@ -1989,6 +2066,18 @@ resource "aws_api_gateway_deployment" "this" {
 
   lifecycle {
     create_before_destroy = true
+  }
+
+  # Force redeployment when any of the critical resources change
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_method.tickets_post.id,
+      aws_api_gateway_method.tickets_id_put.id,
+      aws_api_gateway_method.booking_reference_code_put.id,
+      aws_api_gateway_integration.tickets_post.id,
+      aws_api_gateway_integration.tickets_id_put.id,
+      aws_api_gateway_integration.booking_reference_code_put.id,
+    ]))
   }
 }
 
