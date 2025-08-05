@@ -1,51 +1,58 @@
-// import { Auth } from 'aws-amplify';
-// import { AwsCredentialIdentity } from '@aws-sdk/types';
-
-// export const getCredentials = async (): Promise<AwsCredentialIdentity> => {
-//   const creds = await Auth.currentCredentials();
-//   console.log("Creds",creds)
-//   return {
-//     accessKeyId: creds.accessKeyId,
-//     secretAccessKey: creds.secretAccessKey,
-//     sessionToken: creds.sessionToken,
-//     expiration: creds.expiration
-//   };
-// };
 import {
   CognitoIdentityClient,
   GetIdCommand,
-  GetCredentialsForIdentityCommand,
+  GetCredentialsForIdentityCommand
 } from "@aws-sdk/client-cognito-identity";
+import { Auth } from "aws-amplify"; // or however you get the user session
 
-const cognitoClient = new CognitoIdentityClient({
-  region: "ca-central-1",
-});
+const REGION = "ca-central-1";
+const IDENTITY_POOL_ID = "ca-central-1:e3ec729b-d828-42ee-b752-7400071b905d";
+const USER_POOL_ID = "ca-central-1_ZrlF5Fnvd";
+
+const cognitoClient = new CognitoIdentityClient({ region: REGION });
 
 export const getCredentials = async () => {
+  let logins;
+  let userType = "guest";
+
+  try {
+    const session = await Auth.currentSession();
+    const idToken = session.getIdToken().getJwtToken();
+
+    logins = {
+      [`cognito-idp.${REGION}.amazonaws.com/${USER_POOL_ID}`]: idToken
+    };
+
+    userType = "customer";
+  } catch {
+    logins = undefined;
+  }
+
   const idCommand = new GetIdCommand({
-    IdentityPoolId: "ca-central-1:86fa591a-3bcc-4793-918b-9bc1ebd2d5b7",
+    IdentityPoolId: IDENTITY_POOL_ID,
+    Logins: logins
   });
 
   const idResponse = await cognitoClient.send(idCommand);
 
   if (!idResponse.IdentityId) {
-    throw new Error("No IdentityId returned from Cognito Identity Pool");
+    throw new Error("No IdentityId returned from Cognito");
   }
 
   const credsCommand = new GetCredentialsForIdentityCommand({
     IdentityId: idResponse.IdentityId,
+    Logins: logins
   });
 
   const credsResponse = await cognitoClient.send(credsCommand);
 
   if (!credsResponse.Credentials) {
-    throw new Error("No credentials returned from Cognito");
+    throw new Error("No credentials returned");
   }
 
   return {
-    accessKeyId: credsResponse.Credentials.AccessKeyId!,
-    secretAccessKey: credsResponse.Credentials.SecretKey!,
-    sessionToken: credsResponse.Credentials.SessionToken!,
+    credentials: credsResponse.Credentials,
+    identityId: idResponse.IdentityId,
+    userType
   };
 };
-

@@ -40,7 +40,7 @@ Amplify.configure({
 });
 
 export const lexConfig = {
-  botId: "GFI0AFBTIS", // From Terraform output
+  botId: "JRTYV22E9W", // From Terraform output
   botAliasId: "TSTALIASID", // Set after creating Lex bot alias
   localeId: "en_US",
   region: "ca-central-1",
