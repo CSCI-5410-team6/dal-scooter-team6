@@ -243,7 +243,6 @@ const AdminDashboard: React.FC = () => {
           })
         : [];
 
-      console.log("DEBUG: Filtered pending bookings:", pending);
       setPendingBookings(pending);
     } catch (err: any) {
       setPendingBookingsError(
