@@ -1,16 +1,21 @@
 {
-    "RegisterIntent": [
-        "How do I register?",
-        "How to sign up?",
-        "How to use the app?",
-        "Where is the booking page?",
-        "How to navigate the site?",
-        "How do I create an account?",
-        "Where can I book a bike?",
-        "Show me how to register",
-        "How to get started with the app",
-        "Where do I find the booking section?"
+    "NavigationIntent": [
+      "Go to homepage",
+      "Show me the booking page",
+      "Open the dashboard",
+      "Navigate to home",
+      "Take me to bookings"
     ],
-    "BookingIntent": [],
-    "SupportIntent": []
-}
+    "BookingIntent": [
+      "Get bike access for booking {BookingReference}",
+      "Show bike number for booking {BookingReference}",
+      "What is the access code for {BookingReference}",
+      "Give me bike details for {BookingReference}"
+    ],
+    "SupportIntent": [
+      "Contact franchise about booking {BookingReference}",
+      "I need help with my booking",
+      "Support for booking {BookingReference}",
+      "Talk to franchise"
+    ]
+  }

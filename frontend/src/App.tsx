@@ -1,51 +1,39 @@
-import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import AuthFlow from "./components/auth/AuthFlow";
-import DashboardLayout from "./components/dashboard/DashboardLayout";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "./contextStore/AuthContext";
+import AuthStep1Credentials from "./components/auth/AuthStep1Credentials";
+import AuthChallenge from "./components/auth/AuthChallenge";
+import EmailOTPVerification from "./components/auth/EmailOTPVerification";
 import SignUp from "./components/auth/SignUp";
-import PublicDashboard from "./components/dashboard/PublicDashboard";
+import About from "./components/homepage/About";
+import Service from "./components/homepage/Service";
+import Contact from "./components/homepage/Contact";
+import Chatbot from "./components/chatbot/ChatBot";
+import HomePage from "./components/homepage/HomePage";
+import AdminDashboard from "./components/admin/AdminDashboard";
+import MyBookings from "./components/MyBookings";
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const { authState } = useAuth();
-
-  if (!authState.isAuthenticated) {
-    return <PublicDashboard />;
-  }
-
-  return <>{children}</>;
-};
-
-// Main App Content
-const AppContent: React.FC = () => {
-  return (
-    <Routes>
-      <Route path="/login" element={<AuthFlow />} />
-      <Route path="/signup" element={<SignUp />} />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/" element={<PublicDashboard />} />
-    </Routes>
-  );
-};
-
-// Main App Component
 const App: React.FC = () => {
   return (
-    <Router>
+    <>
       <AuthProvider>
-        <AppContent />
+        <Router>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="about" element={<About />} />
+            <Route path="service" element={<Service />} />
+            <Route path="contact" element={<Contact />} />
+            <Route path="auth-challenge" element={<AuthChallenge />} />
+            <Route path="/login" element={<AuthStep1Credentials />} />
+            <Route path="/verify-email" element={<EmailOTPVerification />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route path="/my-bookings" element={<MyBookings />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+          </Routes>
+
+          <Chatbot />
+        </Router>
       </AuthProvider>
-    </Router>
+    </>
   );
 };
-
 export default App;
